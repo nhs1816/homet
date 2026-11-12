@@ -241,9 +241,9 @@ html{-webkit-text-size-adjust:100%}
   <button data-go="log"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>기록</button>
 </div></nav>
 
-<script src="logic.js?v=202611121150"></script>
-<script src="figure.js?v=202611121150"></script>
-<script src="exercises.js?v=202611121150"></script>
+<script src="logic.js?v=202611121203"></script>
+<script src="figure.js?v=202611121203"></script>
+<script src="exercises.js?v=202611121203"></script>
 <script>
 (function () {
 'use strict';
@@ -377,7 +377,7 @@ function renderToday() {
   const d = new Date();
   root.append(h('div', { class: 'today-date', text: (d.getMonth() + 1) + '월 ' + d.getDate() + '일 ' + DAY_KO[dk] + '요일' }));
   const doneToday = S.sessions.some(s => s.date === ymd);
-  root.append(h('h2', { text: day.items.length ? (doneToday ? '오늘 운동 완료' : '오늘의 운동') : '오늘은 쉬는 날' }));
+  root.append(h('h2', { text: doneToday ? '오늘 운동 완료' : day.items.length ? '오늘의 운동' : '오늘은 쉬는 날' }));
   if (day.note) root.append(h('div', { class: 'note', text: day.note }));
 
   const card = h('div', { class: 'card', style: 'margin-top:12px' });
@@ -568,7 +568,10 @@ function openExercise(id) {
   });
 }
 function setsText(sets) {
-  return sets.map(x => (x.sec != null ? x.sec + '초' : x.reps + '회') + (x.kg ? '(' + x.kg + 'kg)' : '')).join(' · ');
+  const one = x => (x.sec != null ? x.sec + '초' : x.reps + '회');
+  const same = sets.length > 1 && sets.every(x => one(x) === one(sets[0]) && (x.kg || 0) === (sets[0].kg || 0));
+  if (same) return one(sets[0]) + ' × ' + sets.length + '세트' + (sets[0].kg ? ' · ' + sets[0].kg + 'kg' : '');
+  return sets.map(x => one(x) + (x.kg ? '(' + x.kg + 'kg)' : '')).join(' · ');
 }
 function toggleFav(id) {
   const i = S.favorites.indexOf(id);
