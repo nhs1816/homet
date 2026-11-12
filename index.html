@@ -114,6 +114,13 @@ section[data-tab]{display:none} section[data-tab].on{display:block}
 .item .ctl{display:flex;gap:2px}
 .item .ctl button{width:34px;height:34px;border:none;background:none;border-radius:8px;color:var(--muted)}
 .item .ctl button:disabled{opacity:.25}
+.planbtn{width:100%;border:none;border-radius:12px;padding:13px;background:var(--accent-soft);color:var(--accent);font-weight:700;margin-bottom:12px}
+.q{margin:12px 0 4px;font-weight:600;font-size:14px}
+.qchips{display:flex;flex-wrap:wrap;gap:6px}
+.qchips .chip{font-size:14px;padding:7px 12px}
+.pday{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px}
+.pday ul{list-style:none;margin:6px 0 0;padding:0}
+.pday li{display:flex;justify-content:space-between;gap:8px;font-size:14px;padding:3px 0}
 .addbtn{width:100%;border:1.5px dashed var(--line);background:none;border-radius:12px;padding:12px;color:var(--muted);font-weight:600}
 
 /* 도감 */
@@ -241,9 +248,10 @@ html{-webkit-text-size-adjust:100%}
   <button data-go="log"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>기록</button>
 </div></nav>
 
-<script src="logic.js?v=202611121203"></script>
-<script src="figure.js?v=202611121203"></script>
-<script src="exercises.js?v=202611121203"></script>
+<script src="logic.js?v=202611121516"></script>
+<script src="figure.js?v=202611121516"></script>
+<script src="exercises.js?v=202611121516"></script>
+<script src="planner.js?v=202611121516"></script>
 <script>
 (function () {
 'use strict';
@@ -388,7 +396,8 @@ function renderToday() {
   } else {
     const next = nextDay(dk);
     card.append(h('p', { class: 'muted', style: 'margin:0 0 12px', text: next ? '다음 운동은 ' + DAY_KO[next] + '요일이에요.' : '아직 시간표가 비어 있어요. 시간표에서 요일별 운동을 넣어 주세요.' }));
-    if (!next) card.append(h('button', { class: 'btn primary big', onclick: () => go('plan'), text: '시간표 만들기' }));
+    if (!next) card.append(h('button', { class: 'btn primary big', onclick: openPlanner, text: '맞춤 루틴 만들기' }),
+      h('button', { class: 'btn ghost', style: 'width:100%;margin-top:8px', onclick: () => go('plan'), text: '직접 짜기' }));
   }
   if (DAYS.some(k => k !== dk && S.schedule[k].items.length)) card.append(h('button', { class: 'btn ghost', style: 'width:100%;margin-top:8px', onclick: pickOtherDay, text: '다른 요일 루틴으로 하기' }));
   root.append(card);
@@ -428,6 +437,7 @@ let planDay = Logic.dayKey(todayYmd());
 function renderPlan() {
   const root = clear($('#plan'));
   root.append(h('h2', { text: '시간표' }), h('p', { class: 'muted small', style: 'margin:0 0 12px', text: '요일을 고르고 운동을 넣어 주세요.' }));
+  root.append(h('button', { class: 'planbtn', onclick: openPlanner, text: '맞춤 루틴 만들기' }));
   const tk = Logic.dayKey(todayYmd());
   root.append(h('div', { class: 'days' }, DAYS.map(k => h('button', { class: (k === planDay ? 'on' : '') + (k === tk ? ' today' : ''), onclick: () => { planDay = k; renderPlan(); } },
     h('b', { text: DAY_KO[k] }), h('small', { text: S.schedule[k].items.length ? S.schedule[k].items.length + '개' : '-' })))));
@@ -472,6 +482,68 @@ function editItem(dk, i) {
     body.append(h('div', { class: 'actions' },
       h('button', { class: 'btn ghost', onclick: () => { closeSheet(); openExercise(it.exId); }, text: '운동 설명' }),
       h('button', { class: 'btn primary', onclick: () => { save(); closeSheet(); renderPlan(); }, text: '저장' })));
+  });
+}
+
+/* ================= 맞춤 루틴 ================= */
+const PKEY = 'homet.planner';
+function plannerOpts() {
+  let o = null;
+  try { o = JSON.parse(localStorage.getItem(PKEY)); } catch (e) { o = null; }
+  return Object.assign({ goal: 'muscle', days: ['mon', 'wed', 'fri'], minutes: 30, db: { has: false, kg: 5 }, chair: true, level: 2, avoid: [] }, o || {});
+}
+function openPlanner() {
+  const o = plannerOpts();
+  openSheet('맞춤 루틴 만들기', body => {
+    const one = (label, opts, get, set) => {
+      const box = h('div', { class: 'qchips', role: 'group', 'aria-label': label });
+      const draw = () => { clear(box); opts.forEach(([v, t]) => box.append(h('button', { class: 'chip' + (get() === v ? ' on' : ''), 'aria-pressed': String(get() === v), onclick: () => { set(v); draw(); }, text: t }))); };
+      draw(); return [h('div', { class: 'q', text: label }), box];
+    };
+    const many = (label, opts, arr, hint) => {
+      const box = h('div', { class: 'qchips', role: 'group', 'aria-label': label });
+      const draw = () => { clear(box); opts.forEach(([v, t]) => { const on = arr.includes(v); box.append(h('button', { class: 'chip' + (on ? ' on' : ''), 'aria-pressed': String(on), onclick: () => { const i = arr.indexOf(v); if (i >= 0) arr.splice(i, 1); else arr.push(v); draw(); }, text: t })); }); };
+      draw(); return [h('div', { class: 'q', text: label }), hint ? h('div', { class: 'small muted', text: hint }) : null, box];
+    };
+    body.append(...one('목표', [['muscle', '근육 늘리기'], ['fitness', '체력·체중 관리'], ['health', '건강 유지']], () => o.goal, v => o.goal = v));
+    body.append(...many('근력운동 요일', DAYS.map(k => [k, DAY_KO[k]]), o.days, '2~5일을 추천해요'));
+    body.append(...one('한 번에 쓸 시간', [[20, '20분'], [30, '30분'], [45, '45분']], () => o.minutes, v => o.minutes = v));
+    const kgRow = h('div');
+    const drawKg = () => { clear(kgRow); if (o.db.has) kgRow.append(stepper('아령 무게(kg, 한 개)', o.db.kg, 1, 1, 40, v => o.db.kg = v)); };
+    body.append(...one('아령', [[false, '없음 (맨몸만)'], [true, '있음']], () => o.db.has, v => { o.db.has = v; drawKg(); }), kgRow);
+    drawKg();
+    body.append(...one('의자·계단', [[true, '쓸 수 있음'], [false, '없음']], () => o.chair, v => o.chair = v));
+    body.append(...one('운동 경험', [[1, '처음'], [2, '조금 해봄'], [3, '꾸준히 함']], () => o.level, v => o.level = v));
+    body.append(...many('몸 상태 (선택)', Object.entries(Planner.AVOID_LABEL), o.avoid, '고르면 무리가 갈 수 있는 동작을 빼요. 의학적 판단은 아니에요.'));
+    body.append(h('button', { class: 'btn primary big', style: 'margin-top:16px', onclick: () => {
+      if (o.days.length < 1) { toast('요일을 하나 이상 골라 주세요.'); return; }
+      try { localStorage.setItem(PKEY, JSON.stringify(o)); } catch (e) { /* 저장 안 되면 무시 */ }
+      showPlan(o, 0);
+    }, text: '루틴 만들기' }));
+  });
+}
+function showPlan(o, seed) {
+  const plan = Planner.make(o, seed);
+  const chosen = DAYS.filter(k => plan.days[k].length);
+  openSheet('이렇게 짜 봤어요', body => {
+    body.append(h('p', { class: 'small muted', style: 'margin:0 0 10px', text: Planner.GOAL[o.goal].label + ' · 주 ' + chosen.length + '회 · ' + o.minutes + '분' + (o.db.has ? ' · 아령 ' + o.db.kg + 'kg' : ' · 맨몸') }));
+    for (const k of chosen) {
+      const its = plan.days[k];
+      body.append(h('div', { class: 'pday' },
+        h('div', { class: 'row' }, h('b', { class: 'grow', text: DAY_KO[k] + '요일' }), h('span', { class: 'small muted', text: '약 ' + Planner.estimate(its) + '분' })),
+        h('ul', {}, its.map(it => h('li', {}, h('span', { text: it.name }), h('span', { class: 'muted', text: it.sets + '×' + (it.type === 'time' ? it.sec + '초' : it.reps) + (it.kg ? ' · ' + it.kg + 'kg' : '') }))))));
+    }
+    const others = DAYS.filter(k => !chosen.includes(k) && S.schedule[k].items.length).map(k => DAY_KO[k]);
+    body.append(h('div', { class: 'actions' },
+      h('button', { class: 'btn ghost', onclick: () => showPlan(o, seed + 1), text: '다시 만들기' }),
+      h('button', { class: 'btn ghost', onclick: openPlanner, text: '조건 바꾸기' })));
+    body.append(h('button', { class: 'btn primary big', style: 'margin-top:8px', onclick: () => {
+      const msg = chosen.map(k => DAY_KO[k]).join('·') + '요일 운동을 이 루틴으로 바꿀까요? 요일 메모와 지난 기록은 그대로예요.' + (others.length ? ' (' + others.join('·') + '요일 운동은 그대로 남아요)' : '');
+      ask('시간표 바꾸기', msg, '바꾸기', () => {
+        for (const k of chosen) S.schedule[k].items = plan.days[k];
+        save(); planDay = chosen[0]; go('plan'); toast('시간표를 바꿨어요.');
+      });
+    }, text: '이 시간표로 바꾸기' }));
   });
 }
 
