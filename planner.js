@@ -48,7 +48,7 @@
     return Array(n).fill('full');
   }
 
-  function seconds(it) { return it.sets * ((it.type === 'time' ? it.sec : it.reps * 3) + it.rest); }
+  function seconds(it) { return it.sets * ((it.type === 'time' || it.mode === 'amrap' ? it.sec : it.reps * 3) + it.rest); }
   function estimate(items) { let s = 0; for (const it of items) s += seconds(it); return Math.round(s / 60); }
 
   function make(opts, seed) {
@@ -82,6 +82,7 @@
         if (ROLES.acc.includes(e.id) || ROLES.core.includes(e.id)) reps = Math.max(reps, e.defaults.reps || reps);
         if (kg && kg <= 6 && e.equip === '아령' && ['하체', '등', '전신'].includes(e.part)) reps = Math.max(reps, 15);
         it.reps = reps;
+        if (opts.mode === 'amrap') { it.mode = 'amrap'; it.sec = level === 1 ? 30 : 45; }
       }
       if (e.equip === '아령' && kg) it.kg = kg;
       return it;

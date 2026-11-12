@@ -9,7 +9,7 @@
     for (const d of DAYS) schedule[d] = { note: '', items: [] };
     return {
       version: 1,
-      settings: { weeklyGoal: 3, restSec: 60, sound: true },
+      settings: { weeklyGoal: 3, restSec: 60, sound: true, mode: 'reps' },
       schedule,
       favorites: [],
       custom: [],
@@ -36,6 +36,7 @@
       if (Number.isInteger(st.weeklyGoal) && st.weeklyGoal >= 1 && st.weeklyGoal <= 7) s.settings.weeklyGoal = st.weeklyGoal;
       if (isNum(st.restSec) && st.restSec >= 0) s.settings.restSec = st.restSec;
       if (typeof st.sound === 'boolean') s.settings.sound = st.sound;
+      if (st.mode === 'reps' || st.mode === 'amrap') s.settings.mode = st.mode;
     }
     if (isObj(o.schedule)) {
       for (const d of DAYS) {
@@ -91,6 +92,11 @@
   /* ---------- 운동 진행 ---------- */
   const clone = o => JSON.parse(JSON.stringify(o));
 
+  function targetOf(it) {
+    if (it.mode === 'amrap') return { amrapSec: it.sec };
+    if (it.type === 'time') return { sec: it.sec, base: it.base == null ? it.sec : it.base };
+    return { reps: it.reps, base: it.base == null ? it.reps : it.base };
+  }
   function createRun(items, exLookup, now) {
     const list = (items || []).map(it => {
       const ex = exLookup(it.exId);
@@ -102,7 +108,7 @@
       set: 1,
       phase: list.length ? 'work' : 'done',
       restEndAt: 0,
-      log: list.map(it => ({ exId: it.exId, name: it.name, sets: [] })),
+      log: list.map(it => ({ exId: it.exId, name: it.name, sets: [], mode: it.mode === 'amrap' ? 'amrap' : 'reps', target: targetOf(it) })),
       startedAt: now,
     };
   }
@@ -151,8 +157,62 @@
       date: ymd(new Date(run.startedAt)),
       start: run.startedAt,
       end: now,
-      items: run.log.filter(x => x.sets.length).map(x => ({ exId: x.exId, name: x.name, sets: x.sets })),
+      items: run.log.filter(x => x.sets.length).map(x => {
+        const o = { exId: x.exId, name: x.name, sets: x.sets };
+        if (x.target) o.target = x.target;
+        if (x.mode === 'amrap') o.mode = 'amrap';
+        if (x.feel) o.feel = x.feel;
+        return o;
+      }),
     };
+  }
+
+  function setFeel(run, i, feel) { const r = clone(run); if (r.log[i]) r.log[i].feel = feel; return r; }
+
+  /* ---------- 증량 제안 (이중 증량: 두 번 연속 해내고 힘들지 않으면 +1) ---------- */
+  const NEXT = {
+    'incline-push-up': '무릎 푸시업', 'knee-push-up': '푸시업', 'push-up': '다이아몬드 푸시업',
+    'squat': '고블릿 스쿼트', 'wide-squat': '고블릿 스쿼트', 'glute-bridge': '싱글레그 힙브릿지',
+    'reverse-lunge': '불가리안 스플릿 스쿼트', 'step-up': '덤벨 스텝업', 'superman': 'Y-T-W 레이즈',
+    'dead-bug': '할로우 홀드', 'crunch': 'V업', 'calf-raise': '한 발 카프 레이즈',
+  };
+  function suggest(item, sessions) {
+    const id = item.exId;
+    const amrap = item.mode === 'amrap';
+    const hist = [];
+    for (const s of sessions || []) for (const x of s.items || []) {
+      if (x.exId === id && (x.mode === 'amrap') === amrap) hist.push({ date: s.date, start: s.start || 0, x });
+    }
+    hist.sort((a, b) => (b.date + String(b.start).padStart(15, '0')).localeCompare(a.date + String(a.start).padStart(15, '0')));
+    if (amrap) {
+      let best = 0;
+      for (const h of hist) for (const st of h.x.sets) best = Math.max(best, st.reps || 0);
+      return { mode: 'amrap', value: item.sec, dir: 'same', best: best || null, last: hist[0] ? hist[0].x.sets[0].reps : null };
+    }
+    const time = item.type === 'time';
+    const key = time ? 'sec' : 'reps';
+    const base = item[key];
+    const step = time ? 5 : 1;
+    const cap = time ? 60 : (item.kg ? 15 : 20);
+    const recs = hist.map(h => h.x).filter(x => !x.target || x.target.base === base);
+    const tgt = x => (x.target ? x.target[key] : base);
+    const done = x => x.sets.length >= item.sets && x.sets.every(st => (st[key] || 0) >= tgt(x));
+    // 일찍 끝낸 날(세트 수 부족)은 실패로 치지 않고, 한 세트에서 목표를 못 채웠거나 힘들었던 날만 실패
+    const bad = x => x.feel === 'hard' || x.sets.some(st => (st[key] || 0) < tgt(x));
+    const cur = recs.length ? tgt(recs[0]) : base;
+    const res = { mode: 'reps', value: cur, dir: 'same', note: '' };
+    if (recs.length >= 2) {
+      const [a, b] = recs;
+      if (tgt(a) === cur && tgt(b) === cur && done(a) && done(b) && a.feel !== 'hard' && b.feel !== 'hard') {
+        if (cur + step > cap) {
+          res.dir = 'cap';
+          res.note = NEXT[id] ? '이제 "' + NEXT[id] + '"(으)로 바꿔 볼 때예요.' : '횟수 대신 내려갈 때 3초로 천천히 해 보세요.';
+        } else { res.value = cur + step; res.dir = 'up'; res.note = '두 번 연속 해냈어요'; }
+      } else if (bad(a) && bad(b)) {
+        res.value = Math.max(time ? 10 : 1, cur - step); res.dir = res.value < cur ? 'down' : 'same'; res.note = '조금 낮췄어요';
+      }
+    }
+    return res;
   }
 
   function validateBackup(o) {
@@ -172,6 +232,6 @@
     ymd, parse, addDays, dayIndex, dayKey, weekStart,
     weekCount, streakWeeks, lastRecord,
     createRun, completeSet, addRest, restRemaining, finishRest, skipExercise, prevExercise, endRun,
-    validateBackup,
+    validateBackup, setFeel, suggest, targetOf,
   };
 })();
