@@ -1,5 +1,5 @@
 // HOME-T 서비스 워커: 새 버전을 바로 받도록 네트워크 우선, 오프라인이면 저장해 둔 사본으로 열어요.
-const CACHE = "homet-202611131011";
+const CACHE = "homet-202611131015";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./logic.js", "./figure.js", "./exercises.js", "./planner.js",
   "./icons/icon-180.png", "./icons/icon-192.png", "./icons/icon-512.png"];
 

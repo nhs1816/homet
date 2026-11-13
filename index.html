@@ -45,6 +45,8 @@ header.top{display:flex;align-items:center;justify-content:space-between;gap:8px
 .brand{font-weight:800;font-size:19px;letter-spacing:-.02em}
 .brand span{color:var(--accent)}
 .brand{letter-spacing:.01em;display:flex;align-items:baseline;gap:0}
+.brand .tmark{width:1.12em;height:1em;fill:var(--accent);align-self:center;margin-left:1px;transform:translateY(-.02em)}
+.brand .tmark .knuckle{fill:none;stroke:var(--bg);stroke-width:.8;stroke-linecap:round}
 .brand small{font-size:12px;font-weight:600;color:var(--muted);margin-left:10px;letter-spacing:0}
 .iconbtn{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center}
 .iconbtn svg{width:20px;height:20px;stroke:var(--ink);fill:none;stroke-width:1.8}
@@ -258,7 +260,7 @@ html{-webkit-text-size-adjust:100%}
 <body>
 <div class="app">
   <header class="top">
-    <div class="brand" aria-label="HOME-T 홈트">HOME<span>-T</span><small>오늘도 한 개 더</small></div>
+    <div class="brand" role="img" aria-label="HOME-T 홈트">HOME<span>-</span><svg class="tmark" viewBox="0 0 30 27" aria-hidden="true"><rect x="6" y="5" width="18" height="3" rx="1.2"/><rect x="3.2" y="0.6" width="3.4" height="11.8" rx="1.3"/><rect x="0.4" y="3" width="2.6" height="7" rx="1.1"/><rect x="23.4" y="0.6" width="3.4" height="11.8" rx="1.3"/><rect x="27" y="3" width="2.6" height="7" rx="1.1"/><rect x="10.6" y="2.4" width="8.8" height="8.4" rx="2.6"/><path d="M12.3 10.2H17.7L18.7 27H11.3Z"/><path class="knuckle" d="M13 3.4V7.2M15 3.2V7.2M17 3.4V7.2"/></svg><small>오늘도 한 개 더</small></div>
     <button class="iconbtn" id="gear" aria-label="설정"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
   </header>
   <div class="install" id="install" hidden><p id="installText">홈 화면에 설치하면 앱처럼 바로 열 수 있어요.</p>
@@ -275,10 +277,10 @@ html{-webkit-text-size-adjust:100%}
   <button data-go="log"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>기록</button>
 </div></nav>
 
-<script src="logic.js?v=202611131011"></script>
-<script src="figure.js?v=202611131011"></script>
-<script src="exercises.js?v=202611131011"></script>
-<script src="planner.js?v=202611131011"></script>
+<script src="logic.js?v=202611131015"></script>
+<script src="figure.js?v=202611131015"></script>
+<script src="exercises.js?v=202611131015"></script>
+<script src="planner.js?v=202611131015"></script>
 <script>
 (function () {
 'use strict';
