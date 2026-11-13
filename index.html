@@ -197,6 +197,7 @@ textarea,.field{width:100%;border:1px solid var(--line);background:var(--surface
 .run-nav button{border:none;background:none;color:var(--muted);padding:8px}
 .next-prev{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
 .next-prev .thumb{width:64px;flex:none}
+.run-top .spk{display:grid;place-items:center;color:var(--ink)}
 .sugline{text-align:center;font-size:13px;color:var(--muted)}
 .sugline.up{color:var(--ok);font-weight:600}
 .feel{display:flex;flex-direction:column;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px}
@@ -252,10 +253,10 @@ html{-webkit-text-size-adjust:100%}
   <button data-go="log"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>기록</button>
 </div></nav>
 
-<script src="logic.js?v=202611121530"></script>
-<script src="figure.js?v=202611121530"></script>
-<script src="exercises.js?v=202611121530"></script>
-<script src="planner.js?v=202611121530"></script>
+<script src="logic.js?v=202611130952"></script>
+<script src="figure.js?v=202611130952"></script>
+<script src="exercises.js?v=202611130952"></script>
+<script src="planner.js?v=202611130952"></script>
 <script>
 (function () {
 'use strict';
@@ -744,6 +745,11 @@ function openSettings() {
     body.append(h('div', { class: 'toggle', style: 'flex-direction:column;align-items:stretch;gap:4px' }, h('span', { text: '새로 넣는 운동의 기본 방식' }), mseg));
     const sw = h('button', { class: 'switch' + (st.sound ? ' on' : ''), role: 'switch', 'aria-checked': String(st.sound), 'aria-label': '소리', onclick: () => { st.sound = !st.sound; save(); sw.classList.toggle('on', st.sound); sw.setAttribute('aria-checked', String(st.sound)); } });
     body.append(h('div', { class: 'toggle' }, h('span', { text: '쉬는 시간 끝 소리' }), sw));
+    const vs = h('button', { class: 'switch' + (st.voice ? ' on' : ''), role: 'switch', 'aria-checked': String(st.voice), 'aria-label': '음성 안내', onclick: () => {
+      st.voice = !st.voice; save(); vs.classList.toggle('on', st.voice); vs.setAttribute('aria-checked', String(st.voice));
+      if (st.voice) { unlockVoice(); speak('음성 안내를 켰어요', true); }
+    } });
+    body.append(h('div', { class: 'toggle' }, h('div', {}, h('div', { text: '음성 안내' }), h('div', { class: 'small muted', text: canSpeak() ? '운동 시작, 남은 시간, 쉬는 시간을 말로 알려줘요.' : '이 기기에서는 한국어 음성을 찾지 못했어요.' })), vs));
     body.append(h('h3', { text: '백업' }), h('p', { class: 'small muted', style: 'margin:0 0 8px', text: '기록은 이 기기 브라우저에만 저장돼요. 휴대폰을 바꿀 때는 백업 파일로 옮겨 주세요.' }));
     const file = h('input', { type: 'file', accept: 'application/json,.json', style: 'display:none' });
     file.addEventListener('change', () => importBackup(file.files[0]));
@@ -785,6 +791,31 @@ function importBackup(f) {
   r.readAsText(f);
 }
 
+/* ================= 음성 안내 ================= */
+let koVoice = null;
+function loadVoices() { try { koVoice = speechSynthesis.getVoices().find(v => /^ko/i.test(v.lang)) || null; } catch (e) { koVoice = null; } }
+if ('speechSynthesis' in window) { loadVoices(); try { speechSynthesis.addEventListener('voiceschanged', loadVoices); } catch (e) { /* 무시 */ } }
+function canSpeak() {
+  if (!('speechSynthesis' in window)) return false;
+  try { return !!koVoice || speechSynthesis.getVoices().length === 0; } catch (e) { return false; }
+}
+function speak(text, interrupt) {
+  if (!text || !S.settings.voice || !canSpeak()) return;
+  try {
+    if (interrupt) speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'ko-KR'; if (koVoice) u.voice = koVoice; u.rate = 1.05;
+    speechSynthesis.speak(u);
+  } catch (e) { /* 음성 미지원 */ }
+}
+function unlockVoice() { try { if ('speechSynthesis' in window) speechSynthesis.speak(new SpeechSynthesisUtterance('')); } catch (e) { /* 무시 */ } }
+function spokenAmount(it) { return it.mode === 'amrap' ? secLabel(it.sec) + ' 동안 최대한' : it.type === 'time' ? it.sec + '초' : it.reps + '회'; }
+let cueKey = '', cueSaid = new Set(), announced = '';
+function cueFor(key) { if (key !== cueKey) { cueKey = key; cueSaid = new Set(); } }
+function sayCue(c) { if (c) { cueSaid.add(c.key); speak(c.text, true); } }
+const SPK_ON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg>';
+const SPK_OFF = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9l5 6M22 9l-5 6"/></svg>';
+
 /* ================= 운동 모드 ================= */
 let run = null, runEl = null, runFig = null, runFigKey = '', tick = 0, wake = null, adj = null;
 function withSuggestion(it) {
@@ -797,6 +828,7 @@ function withSuggestion(it) {
   return o;
 }
 function startRun(items) {
+  unlockVoice();
   const r = Logic.createRun(items.map(withSuggestion), lookup, Date.now());
   if (r.phase === 'done') { toast('운동이 비어 있어요.'); return; }
   run = r; persist(); openRun();
@@ -817,6 +849,7 @@ function closeRun() {
   document.body.style.overflow = '';
   releaseWake();
   run = null; S.activeRun = null; save(); render();
+  announced = ''; try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch (e) { /* 무시 */ }
 }
 function cur() { return run.items[run.i]; }
 function figInto(host, it, key) {
@@ -835,7 +868,16 @@ function drawRun() {
   inner.append(h('div', { class: 'run-top' },
     h('button', { class: 'close', 'aria-label': run.phase === 'done' ? '닫기' : '끝내기', onclick: run.phase === 'done' ? closeRun : askEnd, text: '×' }),
     h('div', { class: 'bar', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': total, 'aria-valuenow': done }, h('i', { style: 'width:' + Math.min(100, done / total * 100) + '%' })),
-    h('span', { class: 'small muted', text: Math.min(run.i + 1, run.items.length) + ' / ' + run.items.length })));
+    h('span', { class: 'small muted', text: Math.min(run.i + 1, run.items.length) + ' / ' + run.items.length }),
+    (() => {
+      const b = h('button', { class: 'close spk', 'aria-label': S.settings.voice ? '음성 안내 끄기' : '음성 안내 켜기', 'aria-pressed': String(!!S.settings.voice), onclick: () => {
+        S.settings.voice = !S.settings.voice; save();
+        if (!S.settings.voice) { try { speechSynthesis.cancel(); } catch (e) { /* 무시 */ } } else { unlockVoice(); speak('음성 안내를 켰어요', true); }
+        drawRun();
+      } });
+      b.innerHTML = S.settings.voice ? SPK_ON : SPK_OFF; // 고정된 아이콘 문자열만 넣음
+      return b;
+    })()));
   const body = h('div', { class: 'run-body' });
   inner.append(body);
   runFigKey = runFigKey && run.phase === 'work' ? runFigKey : '';
@@ -856,6 +898,8 @@ function drawRun() {
     const fw = h('div', { class: 'fig-wrap' });
     body.append(fw);
     runFigKey = ''; figInto(fw, it, run.i + ':' + run.set);
+    const akey = run.i + ':' + run.set;
+    if (!run.timerEndAt && !run.awaitCount && announced !== akey) { announced = akey; speak(it.name + '. ' + run.set + '세트, ' + spokenAmount(it), false); }
     const g = it.sug || {};
     const arrow = g.dir === 'up' ? ' ↑' : g.dir === 'down' ? ' ↓' : '';
     body.append(h('h2', { text: it.name }), h('div', { class: 'target', text: run.set + ' / ' + it.sets + '세트 · ' + target(it) + arrow }));
@@ -922,17 +966,27 @@ function onTick() {
   if (run.phase === 'rest') {
     const left = Logic.restRemaining(run, now);
     const n = document.getElementById('restNum'); if (n) n.textContent = fmt(left);
+    cueFor('rest:' + run.i + ':' + run.set);
+    sayCue(Logic.cue('rest', run.restTotal || 60, left, cueSaid));
     if (left <= 0) { beep(); endRest(); }
   } else if (run.phase === 'work' && run.timerEndAt) {
     const it = cur();
     const n = document.getElementById('timeNum');
-    if (run.countIn && now < run.countIn) { if (n) n.textContent = Math.ceil((run.countIn - now) / 1000); return; }
+    cueFor('timer:' + run.i + ':' + run.set);
+    if (run.countIn && now < run.countIn) {
+      const cl = Math.ceil((run.countIn - now) / 1000);
+      if (n) n.textContent = cl;
+      sayCue(Logic.cue('countin', 3, cl, cueSaid));
+      return;
+    }
+    if (run.countIn) sayCue(Logic.cue('countin', 3, 0, cueSaid));
     const left = Math.max(0, Math.ceil((run.timerEndAt - now) / 1000));
     if (n) n.textContent = fmt(left);
+    if (left > 0) sayCue(Logic.cue('work', it.sec, left, cueSaid));
     if (left <= 0) {
       clearTimer(); beep();
-      if (it.mode === 'amrap') { run.awaitCount = true; persist(); drawRun(); }
-      else doneSet({ sec: it.sec });
+      if (it.mode === 'amrap') { speak('끝! 몇 개 했는지 입력해 주세요', true); run.awaitCount = true; persist(); drawRun(); }
+      else { speak('끝!', true); doneSet({ sec: it.sec }); }
     }
   }
 }
@@ -940,6 +994,12 @@ function doneSet(result) {
   const before = run.i;
   run = Logic.completeSet(run, result, Date.now());
   if (run.i !== before || run.phase === 'done') run.feelFor = before;
+  if (run.phase === 'rest') {
+    run.restTotal = Logic.restRemaining(run, Date.now());
+    const nx = cur();
+    const pre = run.i !== before ? run.log[before].name + ' 끝. 어땠는지 눌러 주세요. ' : '';
+    if (run.restTotal > 0) speak(pre + run.restTotal + '초 쉬어요. 다음은 ' + nx.name + ' ' + run.set + '세트.', true);
+  } else if (run.phase === 'done') speak('수고했어요. 오늘 운동 끝!', true);
   adj = null; persist(); drawRun();
 }
 const FEELS = [['easy', '쉬웠어요'], ['ok', '적당해요'], ['hard', '힘들었어요']];
@@ -970,6 +1030,7 @@ function askEnd() {
 }
 function finish() {
   if (run.finished) { drawRun(); return; }
+  speak('수고했어요. 오늘 운동 끝!', true);
   const s = Logic.endRun(run, Date.now());
   if (s.items.length) S.sessions.push(s);
   run.phase = 'done'; run.finished = s; persist(); drawRun();
@@ -1003,7 +1064,7 @@ function drawSummary(body) {
 let actx = null;
 function beep() {
   if ('vibrate' in navigator) try { navigator.vibrate(200); } catch (e) { /* 무시 */ }
-  if (!S.settings.sound) return;
+  if (!S.settings.sound || (S.settings.voice && canSpeak())) return;
   try {
     actx = actx || new (window.AudioContext || window.webkitAudioContext)();
     [0, 0.22].forEach(t => {

@@ -9,7 +9,7 @@
     for (const d of DAYS) schedule[d] = { note: '', items: [] };
     return {
       version: 1,
-      settings: { weeklyGoal: 3, restSec: 60, sound: true, mode: 'reps' },
+      settings: { weeklyGoal: 3, restSec: 60, sound: true, mode: 'reps', voice: true },
       schedule,
       favorites: [],
       custom: [],
@@ -37,6 +37,7 @@
       if (isNum(st.restSec) && st.restSec >= 0) s.settings.restSec = st.restSec;
       if (typeof st.sound === 'boolean') s.settings.sound = st.sound;
       if (st.mode === 'reps' || st.mode === 'amrap') s.settings.mode = st.mode;
+      if (typeof st.voice === 'boolean') s.settings.voice = st.voice;
     }
     if (isObj(o.schedule)) {
       for (const d of DAYS) {
@@ -215,6 +216,24 @@
     return res;
   }
 
+  /* ---------- 음성 안내 타이밍: 남은 초(left)에 할 말, 이미 한 말(said)은 건너뜀 ---------- */
+  function cue(kind, total, left, said) {
+    let c = null;
+    if (kind === 'rest') {
+      if (left === 10 && total > 15) c = { key: 'r10', text: '10초 남았어요' };
+      else if (left >= 1 && left <= 3) c = { key: 'r' + left, text: String(left) };
+      else if (left === 0) c = { key: 'r0', text: '시작하세요' };
+    } else if (kind === 'work') {
+      if (total >= 30 && left === Math.floor(total / 2)) c = { key: 'half', text: '절반 지났어요' };
+      else if (left >= 1 && left <= 5) c = { key: 'w' + left, text: String(left) };
+    } else if (kind === 'countin') {
+      if (left >= 1 && left <= 3) c = { key: 'c' + left, text: String(left) };
+      else if (left === 0) c = { key: 'c0', text: '시작' };
+    }
+    if (!c || (said && said.has(c.key))) return null;
+    return c;
+  }
+
   function validateBackup(o) {
     if (!isObj(o)) return { ok: false, error: '백업 파일 형식이 아니에요.' };
     if (o.version !== 1) return { ok: false, error: '지원하지 않는 백업 버전이에요.' };
@@ -232,6 +251,6 @@
     ymd, parse, addDays, dayIndex, dayKey, weekStart,
     weekCount, streakWeeks, lastRecord,
     createRun, completeSet, addRest, restRemaining, finishRest, skipExercise, prevExercise, endRun,
-    validateBackup, setFeel, suggest, targetOf,
+    validateBackup, setFeel, suggest, targetOf, cue,
   };
 })();
