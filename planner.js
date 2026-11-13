@@ -121,5 +121,27 @@
     return { days };
   }
 
-  window.Planner = { ROLES, AVOID, AVOID_LABEL, GOAL, make, estimate };
+  /* 운동 중 바꾸기 후보: 같은 역할, 가진 도구·몸 상태로 거름 */
+  function alternatives(exId, opts) {
+    opts = opts || {};
+    const byId = {};
+    for (const e of window.EXERCISES) byId[e.id] = e;
+    if (!byId[exId]) return [];
+    const avoid = new Set();
+    for (const a of opts.avoid || []) for (const id of AVOID[a] || []) avoid.add(id);
+    const hasDb = !!(opts.db && opts.db.has);
+    const needsChair = e => (e.props || []).some(p => p && p.type === 'chair');
+    const out = [], seen = new Set([exId]);
+    for (const r in ROLES) {
+      if (!ROLES[r].includes(exId)) continue;
+      for (const id of ROLES[r]) {
+        const e = byId[id];
+        if (!e || seen.has(id) || avoid.has(id) || (!hasDb && e.equip === '아령') || (!opts.chair && needsChair(e))) continue;
+        seen.add(id); out.push(e);
+      }
+    }
+    return out;
+  }
+
+  window.Planner = { ROLES, AVOID, AVOID_LABEL, GOAL, make, estimate, alternatives };
 })();

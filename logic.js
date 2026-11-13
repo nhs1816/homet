@@ -9,7 +9,7 @@
     for (const d of DAYS) schedule[d] = { note: '', items: [] };
     return {
       version: 1,
-      settings: { weeklyGoal: 3, restSec: 60, sound: true, mode: 'reps', voice: true },
+      settings: { weeklyGoal: 3, restSec: 60, sound: true, mode: 'reps', voice: true, tempo: 'normal', warmup: false },
       schedule,
       favorites: [],
       custom: [],
@@ -46,6 +46,8 @@
       if (typeof st.sound === 'boolean') s.settings.sound = st.sound;
       if (st.mode === 'reps' || st.mode === 'amrap') s.settings.mode = st.mode;
       if (typeof st.voice === 'boolean') s.settings.voice = st.voice;
+      if (st.tempo === 'slow' || st.tempo === 'normal' || st.tempo === 'fast') s.settings.tempo = st.tempo;
+      if (typeof st.warmup === 'boolean') s.settings.warmup = st.warmup;
     }
     if (isObj(o.schedule)) {
       for (const d of DAYS) {
@@ -225,6 +227,48 @@
     return res;
   }
 
+  /* ---------- 템포 카운트 ---------- */
+  const TEMPO_SEC = { slow: 4, normal: 3, fast: 2 };
+  const KO_ONE = ['', '하나', '둘', '셋', '넷', '다섯', '여섯', '일곱', '여덟', '아홉'];
+  const KO_TEN = ['', '열', '스물', '서른', '마흔', '쉰'];
+  function koCount(n) {
+    if (!Number.isInteger(n) || n < 1 || n > 50) return String(n);
+    return KO_TEN[Math.floor(n / 10)] + KO_ONE[n % 10];
+  }
+
+  /* ---------- 운동 중 바꾸기 ---------- */
+  function swapExercise(run, i, item, exLookup) {
+    const r = clone(run);
+    const ex = exLookup(item.exId);
+    const it = Object.assign({}, item, { name: (ex && ex.name) || item.name || item.exId, missing: !ex });
+    r.items[i] = it;
+    r.log[i] = { exId: it.exId, name: it.name, sets: [], mode: it.mode === 'amrap' ? 'amrap' : 'reps', target: targetOf(it) };
+    if (i === r.i) r.set = 1;
+    return r;
+  }
+
+  /* ---------- 지난 기록 고치기 ---------- */
+  function cleanSet(st) {
+    if (!isObj(st)) return null;
+    const o = {};
+    if (isNum(st.sec)) { if (st.sec <= 0) return null; o.sec = st.sec; }
+    else if (isNum(st.reps)) { if (st.reps <= 0) return null; o.reps = st.reps; }
+    else return null;
+    if (isNum(st.kg) && st.kg > 0) o.kg = st.kg;
+    if (isNum(st.amrap) && st.amrap > 0) o.amrap = st.amrap;
+    return o;
+  }
+  function editSession(sessions, id, exId, sets) {
+    const out = [];
+    for (const s of sessions) {
+      if (s.id !== id) { out.push(s); continue; }
+      const c = clone(s);
+      c.items = c.items.map(x => (x.exId === exId ? Object.assign(x, { sets: (sets || []).map(cleanSet).filter(Boolean) }) : x)).filter(x => x.sets.length);
+      if (c.items.length) out.push(c);
+    }
+    return out;
+  }
+
   /* ---------- 진행 그래프 계산 ---------- */
   function weeklySeries(sessions, today, n) {
     const ws = weekStart(today), out = [];
@@ -310,5 +354,6 @@
     createRun, completeSet, addRest, restRemaining, finishRest, skipExercise, prevExercise, endRun,
     validateBackup, setFeel, suggest, targetOf, cue,
     weeklySeries, exerciseSeries, exerciseList, upsertBody, bodySeries,
+    TEMPO_SEC, koCount, swapExercise, editSession,
   };
 })();
