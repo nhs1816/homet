@@ -19,6 +19,7 @@
       restWeeks: [],
       routines: [],
       activeRoutine: '',
+      backup: { at: 0, snooze: 0 },
     };
   }
 
@@ -67,6 +68,7 @@
     if (Array.isArray(o.routines)) s.routines = o.routines.filter(r => isObj(r) && typeof r.id === 'string' && typeof r.name === 'string' && isObj(r.schedule) && DAYS.every(d => isObj(r.schedule[d]) && Array.isArray(r.schedule[d].items)))
       .map(r => ({ id: r.id, name: r.name, schedule: Object.fromEntries(DAYS.map(d => [d, { note: typeof r.schedule[d].note === 'string' ? r.schedule[d].note : '', items: r.schedule[d].items.filter(okItem) }])) }));
     if (typeof o.activeRoutine === 'string') s.activeRoutine = o.activeRoutine;
+    if (isObj(o.backup)) s.backup = { at: isNum(o.backup.at) ? o.backup.at : 0, snooze: isNum(o.backup.snooze) ? o.backup.snooze : 0 };
     return s;
   }
 
@@ -97,11 +99,11 @@
     const rest = new Set(restWeeks || []);
     let n = 0, w = addDays(weekStart(today), -7);
     for (let guard = 0; guard < 600; guard++) {
-      if (rest.has(w)) { w = addDays(w, -7); continue; } // 쉬어가는 주: 세지도 끊지도 않음
-      if (weekCount(sessions, w) < goal) break;
-      n++; w = addDays(w, -7);
+      if (weekCount(sessions, w) >= goal) n++;           // 목표를 채운 주는 쉬는 주여도 셈
+      else if (!rest.has(w)) break;                          // 쉬는 주(미달)는 건너뜀
+      w = addDays(w, -7);
     }
-    if (!rest.has(weekStart(today)) && weekCount(sessions, today) >= goal) n++;
+    if (weekCount(sessions, today) >= goal) n++;
     return n;
   }
   function lastRecord(sessions, exId) {
@@ -350,7 +352,7 @@
       let run = 0, w = weekStart(list[0].date);
       const end = weekStart(today);
       for (let guard = 0; guard < 1000 && w <= end; guard++) {
-        if (!rest.has(w)) {
+        if (weekCount(sessions, w) >= goal || !rest.has(w)) {
           if (weekCount(sessions, w) >= goal) {
             run++;
             const lastDay = list.filter(s => s.date >= w && s.date <= addDays(w, 6)).map(s => s.date).sort().pop();
@@ -427,6 +429,17 @@
     s.routines = s.routines.filter(x => x.id !== id);
     if (s.activeRoutine === id) { s.activeRoutine = s.routines[0].id; s.schedule = clone(s.routines[0].schedule); }
     return s;
+  }
+
+  /* ---------- 백업 알림: 마지막 백업 뒤 운동 10회, 또는 30일 지나고 3회 이상 ---------- */
+  function needBackup(st, now) {
+    const b = st.backup || { at: 0, snooze: 0 };
+    if (now < (b.snooze || 0)) return false;
+    const since = (st.sessions || []).filter(s => (s.start || 0) > (b.at || 0));
+    if (since.length >= 10) return true;
+    if (since.length < 3) return false;
+    const from = b.at || Math.min(...since.map(s => s.start || now));
+    return now - from >= 30 * 86400000;
   }
 
   /* ---------- 진행 그래프 계산 ---------- */
@@ -516,6 +529,6 @@
     validateBackup, setFeel, suggest, targetOf, cue,
     weeklySeries, exerciseSeries, exerciseList, upsertBody, bodySeries,
     TEMPO_SEC, koCount, swapExercise, editSession, withWarmup, skipBlock, quickRoutine,
-    canRest, badges, monthReport, ensureRoutines, syncRoutine, switchRoutine, addRoutine, renameRoutine, removeRoutine,
+    needBackup, canRest, badges, monthReport, ensureRoutines, syncRoutine, switchRoutine, addRoutine, renameRoutine, removeRoutine,
   };
 })();

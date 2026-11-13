@@ -228,6 +228,8 @@ textarea,.field{width:100%;border:1px solid var(--line);background:var(--surface
 .badge{display:flex;flex-direction:column;gap:2px;border:1px solid var(--line);border-radius:12px;padding:8px 10px;opacity:.55}
 .badge.got{opacity:1;border-color:var(--accent);background:var(--accent-soft)}
 .badge .medal{color:var(--accent);font-size:18px;line-height:1}
+.note.backup{margin:10px 0 0;font-size:13px}
+.promise li{margin:3px 0}
 .sugline{text-align:center;font-size:13px;color:var(--muted)}
 .sugline.up{color:var(--ok);font-weight:600}
 .feel{display:flex;flex-direction:column;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px}
@@ -283,10 +285,10 @@ html{-webkit-text-size-adjust:100%}
   <button data-go="log"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>기록</button>
 </div></nav>
 
-<script src="logic.js?v=202611131030"></script>
-<script src="figure.js?v=202611131030"></script>
-<script src="exercises.js?v=202611131030"></script>
-<script src="planner.js?v=202611131030"></script>
+<script src="logic.js?v=202611131517"></script>
+<script src="figure.js?v=202611131517"></script>
+<script src="exercises.js?v=202611131517"></script>
+<script src="planner.js?v=202611131517"></script>
 <script>
 (function () {
 'use strict';
@@ -426,6 +428,11 @@ function renderToday() {
   root.append(h('h2', { text: doneToday ? '오늘 운동 완료' : day.items.length ? '오늘의 운동' : '오늘은 쉬는 날' }));
   if (day.note) root.append(h('div', { class: 'note', text: day.note }));
 
+  if (Logic.needBackup(S, Date.now())) root.append(h('div', { class: 'note backup' },
+    h('div', { text: '운동 기록이 쌓였어요. 기록은 이 휴대폰 브라우저에만 있어서, 폰을 바꾸거나 데이터가 지워지면 사라질 수 있어요.' }),
+    h('div', { class: 'row', style: 'margin-top:6px;gap:14px' },
+      h('button', { class: 'linkbtn', onclick: openSettings, text: '지금 백업하기' }),
+      h('button', { class: 'linkbtn', style: 'color:var(--muted)', onclick: () => { S.backup.snooze = Date.now() + 7 * 86400000; save(); render(); }, text: '일주일 뒤에' }))));
   const card = h('div', { class: 'card', style: 'margin-top:12px' });
   if (day.items.length) {
     card.append(h('div', { class: 'row muted small' }, h('span', { class: 'grow', text: '운동 ' + day.items.length + '개' }), h('span', { text: '약 ' + estMin(day.items) + '분' })));
@@ -472,7 +479,7 @@ function pickOtherDay() {
     for (const k of DAYS) {
       const it = S.schedule[k].items;
       if (!it.length) continue;
-      body.append(h('button', { class: 'card', style: 'width:100%;text-align:left;margin-bottom:8px', onclick: () => { closeSheet(); startRun(it); } },
+      body.append(h('button', { class: 'card', style: 'width:100%;text-align:left;margin-bottom:8px', onclick: () => { closeSheet(); startRun(it, { day: k }); } },
         h('b', { text: DAY_KO[k] + '요일' }), h('div', { class: 'small muted', text: it.map(x => x.name).join(', ') })));
     }
   });
@@ -1036,7 +1043,11 @@ function openSettings() {
       h('button', { class: 'btn ghost', onclick: exportBackup, text: '백업 내보내기' }),
       h('button', { class: 'btn ghost', onclick: () => file.click(), text: '백업 가져오기' })),
       h('button', { class: 'btn ghost', style: 'width:100%;margin-top:8px', onclick: copyBackup, text: '백업 내용 복사' }),
-      h('p', { class: 'small muted', style: 'margin:6px 0 0', text: '파일 저장이 안 되면 복사해서 메모장에 .json 파일로 저장해 주세요.' }));
+      h('p', { class: 'small muted', style: 'margin:6px 0 0', text: '파일 저장이 안 되면 복사해서 메모장에 .json 파일로 저장해 주세요.' }),
+      h('p', { class: 'small muted', style: 'margin:4px 0 0', text: S.backup.at ? '마지막 백업: ' + Logic.ymd(new Date(S.backup.at)) : '아직 백업한 적이 없어요.' }));
+    body.append(h('h3', { text: 'HOME-T의 약속' }), h('ul', { class: 'dots small promise' },
+      ['광고를 넣지 않아요.', '별점·리뷰를 조르는 팝업을 띄우지 않아요.', '운동 기록은 이 기기 안에만 저장돼요. 서버로 보내지 않아요.',
+       '유료 기능이 생겨도 카드 등록 없는 무료 체험, 앱 안에서 바로 해지, 무료로 쓸 수 있는 범위를 처음부터 알려 드려요.'].map(t => h('li', { text: t }))));
   });
 }
 function exportBackup() {
@@ -1045,15 +1056,18 @@ function exportBackup() {
   const a = h('a', { href: URL.createObjectURL(blob), download: 'homet-backup-' + todayYmd() + '.json' });
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  setTimeout(() => ask('백업 파일', '휴대폰에 백업 파일이 저장됐나요? 저장이 안 됐다면 "백업 내용 복사"를 써 주세요.', '저장됐어요', () => { S.backup.at = Date.now(); S.backup.snooze = 0; save(); render(); toast('마지막 백업을 기록했어요.'); }), 600);
 }
 function copyBackup() {
   const text = JSON.stringify(Object.assign({}, S, { activeRun: null }));
   const fallback = () => openSheet('백업 내용', body => {
     const ta = h('textarea', { rows: 8, readonly: true, 'aria-label': '백업 내용' }); ta.value = text;
-    body.append(h('p', { class: 'small muted', text: '전체 선택해서 복사해 주세요.' }), ta);
+    body.append(h('p', { class: 'small muted', text: '전체 선택해서 복사한 뒤, 메모장에 .json 파일로 저장해 주세요.' }), ta,
+      h('button', { class: 'btn primary big', style: 'margin-top:8px', onclick: () => { closeSheet(); mark(); toast('마지막 백업을 기록했어요.'); }, text: '복사해서 저장했어요' }));
     setTimeout(() => { ta.focus(); ta.select(); }, 50);
   });
-  try { navigator.clipboard.writeText(text).then(() => toast('백업 내용을 복사했어요.'), fallback); } catch (e) { fallback(); }
+  const mark = () => { S.backup.at = Date.now(); S.backup.snooze = 0; save(); render(); };
+  try { navigator.clipboard.writeText(text).then(() => { mark(); toast('백업 내용을 복사했어요. 메모장에 붙여 넣어 저장해 주세요.'); }, fallback); } catch (e) { fallback(); }
 }
 function importBackup(f) {
   if (!f) return;
@@ -1064,7 +1078,7 @@ function importBackup(f) {
     const v = Logic.validateBackup(o);
     if (!v.ok) { toast('가져오지 못했어요: ' + (o ? v.error : 'JSON 파일이 아니에요.') + ' 기존 기록은 그대로예요.'); return; }
     ask('백업 가져오기', '지금 기록과 시간표를 백업 파일 내용으로 바꿀까요? (기록 ' + o.sessions.length + '개)', '바꾸기', () => {
-      S = Logic.ensureRoutines(Logic.loadState(JSON.stringify(o))); S.activeRun = null; save(); toast('백업을 가져왔어요.'); render();
+      S = Logic.ensureRoutines(Logic.loadState(JSON.stringify(o))); S.activeRun = null; S.backup = { at: Date.now(), snooze: 0 }; save(); toast('백업을 가져왔어요.'); render();
     });
   };
   r.readAsText(f);
@@ -1113,10 +1127,11 @@ function avoidIds() {
   return ids;
 }
 function startRun(items, opts) {
-  unlockVoice();
+  unlockVoice(); counting = null;
   let list = items.map(withSuggestion);
   if (S.settings.warmup && !(opts && opts.quick)) list = Logic.withWarmup(list, lookup, avoidIds());
   const r = Logic.createRun(list, lookup, Date.now());
+  r.sourceDay = (opts && opts.day) || Logic.dayKey(todayYmd());
   if (r.phase === 'done') { toast('운동이 비어 있어요.'); return; }
   run = r; persist(); openRun();
 }
@@ -1136,7 +1151,7 @@ function closeRun() {
   document.body.style.overflow = '';
   releaseWake();
   run = null; S.activeRun = null; save(); render();
-  announced = ''; try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch (e) { /* 무시 */ }
+  announced = ''; counting = null; try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch (e) { /* 무시 */ }
 }
 function cur() { return run.items[run.i]; }
 function figInto(host, it, key) {
@@ -1255,7 +1270,8 @@ function swapItem(old, ex) {
 function openSwap() {
   const old = cur();
   const o = plannerOpts();
-  const list = Planner.alternatives(old.exId, { db: o.db.has ? o.db : { has: true }, chair: o.chair, avoid: o.avoid });
+  let answered = false; try { answered = !!localStorage.getItem(PKEY); } catch (e) { answered = false; }
+  const list = Planner.alternatives(old.exId, answered ? { db: o.db, chair: o.chair, avoid: o.avoid } : { db: { has: true }, chair: true, avoid: [] });
   openSheet(old.name + ' 대신', body => {
     if (!list.length) { body.append(h('p', { class: 'muted', text: '바꿀 수 있는 비슷한 운동이 없어요.' })); return; }
     body.append(h('p', { class: 'small muted', style: 'margin:0 0 8px', text: '같은 부위를 쓰는 운동이에요. 맞춤 루틴에서 고른 도구·몸 상태를 반영했어요.' }));
@@ -1272,13 +1288,15 @@ function pickSwap(old, ex) {
   openSheet(ex.name + '(으)로 바꾸기', body => {
     const apply = toPlan => {
       run = Logic.swapExercise(run, run.i, withSuggestion(base), lookup);
+      let msg = '오늘만 바꿨어요.';
       if (toPlan) {
-        const dk = Logic.dayKey(todayYmd());
-        const days = [dk].concat(DAYS.filter(k => k !== dk));
-        for (const k of days) { const i = S.schedule[k].items.findIndex(x => x.exId === old.exId); if (i >= 0) { S.schedule[k].items[i] = base; break; } }
+        const dk = run.sourceDay || Logic.dayKey(todayYmd());
+        const i = S.schedule[dk] ? S.schedule[dk].items.findIndex(x => x.exId === old.exId) : -1;
+        if (i >= 0) { S.schedule[dk].items[i] = swapItem(S.schedule[dk].items[i], ex); msg = DAY_KO[dk] + '요일 시간표에도 바꿨어요.'; }
+        else msg = '시간표에서 이 운동을 찾지 못해 오늘만 바꿨어요.';
       }
       closeSheet(); runFigKey = ''; announced = ''; adj = null; counting = null; persist(); drawRun();
-      toast(toPlan ? '시간표에도 바꿨어요.' : '오늘만 바꿨어요.');
+      toast(msg);
     };
     body.append(h('div', { class: 'actions' },
       h('button', { class: 'btn ghost', onclick: () => apply(false), text: '오늘만' }),
@@ -1381,7 +1399,7 @@ function feelBox() {
 }
 function endRest() { run = Logic.finishRest(run); persist(); drawRun(); }
 function askEnd() {
-  const any = run.log.some(x => x.sets.length);
+  const any = run.log.some(x => x.sets.length && !x.block);
   openSheet('운동을 끝낼까요?', body => {
     body.append(h('p', { class: 'muted', text: any ? '지금까지 한 세트만 기록돼요.' : '아직 완료한 세트가 없어요.' }));
     body.append(h('div', { class: 'actions' }, h('button', { class: 'btn ghost', onclick: closeSheet, text: '계속하기' }),
@@ -1463,7 +1481,7 @@ function saveRunAsSession(r) {
 if (S.activeRun) {
   const saved = S.activeRun;
   openSheet('진행 중인 운동이 있어요', body => {
-    const d = saved.log.reduce((a, x) => a + x.sets.length, 0);
+    const d = saved.log.reduce((a, x) => a + (x.block ? 0 : x.sets.length), 0);
     body.append(h('p', { class: 'muted', text: Logic.ymd(new Date(saved.startedAt)) + ' 시작 · 완료 ' + d + '세트' }));
     body.append(h('div', { class: 'actions' },
       h('button', { class: 'btn ghost', onclick: () => { closeSheet(); if (d) { saveRunAsSession(saved); toast('한 데까지 저장했어요.'); } S.activeRun = null; save(); render(); }, text: d ? '저장하고 끝내기' : '버리기' }),
