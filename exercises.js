@@ -565,5 +565,81 @@
       defaults: Object.assign(R(3, 6, 90), { kg: 4 }) },
   ]);
 
+  /* ============ 고급 단계 (추가) ============ */
+  add('하체·맨몸', '하체', '맨몸', [
+    { id: 'pistol-squat', name: '피스톨 스쿼트(의자 보조)', level: 3, equip: '의자', props: [{ type: 'chair', joint: 'hip', pose: 1 }],
+      poses: [P({ legB: [60, 60], armF: [90, 90], armB: [90, 90], t: 1.3, breath: 'out' }), P({ torso: 150, legF: [85, -10], legB: [88, 88], armF: [90, 90], armB: [90, 90], t: 1.5, breath: 'in' })],
+      steps: ['의자 앞에 등을 지고 서서 한 다리를 앞으로 들어 올립니다.', '버티는 다리로만 천천히 앉아 엉덩이가 의자에 살짝 닿게 합니다.', '팔을 앞으로 뻗어 균형을 잡고, 버티는 다리 발바닥 전체로 밀어 일어섭니다.', '다리를 바꿔 반복합니다.'],
+      breathing: '앉을 때 들이쉬고, 일어설 때 내쉽니다.',
+      mistakes: ['의자에 털썩 앉아 반동으로 일어납니다.', '버티는 무릎이 안쪽으로 꺾입니다.'],
+      easier: '더 높은 의자나 소파를 씁니다.', harder: '의자 없이 하거나 바닥 가까이까지 내려갑니다.',
+      defaults: R(3, 6, 90) },
+    { id: 'single-leg-calf-raise', name: '한 발 카프 레이즈', level: 2,
+      poses: [P({ legB: [5, -110], armF: [20, 20], armB: [20, 20], t: 1, breath: 'in' }), P({ legB: [5, -110], footF: 30, armF: [20, 20], armB: [20, 20], t: 1, breath: 'out' })],
+      steps: ['한 발로 서고 반대 발은 뒤로 살짝 들어 올립니다.', '벽을 가볍게 짚고 뒤꿈치를 최대한 들어 올립니다.', '1초 멈춘 뒤 천천히 내립니다.', '발을 바꿔 반복합니다.'],
+      breathing: '올라갈 때 내쉬고, 내려올 때 들이쉽니다.',
+      mistakes: ['발목이 바깥으로 꺾입니다.', '반동으로 튕깁니다.'],
+      easier: '두 발 카프 레이즈로 합니다.', harder: '계단 끝에 서서 뒤꿈치를 더 깊게 내립니다.',
+      defaults: R(3, 12, 45) },
+  ]);
+  add('가슴·어깨·팔·맨몸', '가슴·어깨', '맨몸', [
+    { id: 'archer-push-up', name: '아처 푸시업', level: 3, view: 'front', hide: ['legs'], props: ['mat'],
+      poses: [P({ torso: 180, tl: 0.3, armF: [40, 40], armB: [-40, -40], t: 1, breath: 'out' }), P({ hip: [110, 90], torso: 180, tl: 0.3, armF: [80, 20], armB: [-85, -85], t: 1.3, breath: 'in' })],
+      steps: ['손을 어깨너비의 두 배로 넓게 짚습니다.', '한쪽 팔꿈치만 굽히며 몸을 그쪽으로 내리고, 반대 팔은 쭉 폅니다.', '굽힌 팔로 밀어 올라온 뒤 반대쪽도 합니다.'],
+      breathing: '내려갈 때 들이쉬고, 올라올 때 내쉽니다.',
+      mistakes: ['펴는 팔까지 굽힙니다.', '허리가 처집니다.'],
+      easier: '무릎을 대고 합니다.', harder: '펴는 팔의 손을 손가락 끝으로만 짚습니다.',
+      defaults: R(3, 6, 90) },
+  ]);
+  add('코어', '코어', '맨몸', [
+    { id: 'plank-up-down', name: '플랭크 업다운', level: 3, props: ['mat'],
+      poses: [P({ torso: 98, legF: [-82, -82], legB: [-82, -82], armF: [0, 90], armB: [0, 90], t: 0.8, breath: 'in' }), P(Object.assign({ t: 0.8, breath: 'out' }, PLANK_HI))],
+      steps: ['팔꿈치를 대는 플랭크 자세로 시작합니다.', '한 손씩 바닥을 짚어 팔을 편 플랭크로 올라갑니다.', '다시 한 팔씩 팔꿈치를 내려 처음 자세로 돌아옵니다.', '먼저 짚는 손을 번갈아 바꿉니다.'],
+      breathing: '올라갈 때 내쉬고, 내려올 때 들이쉽니다.',
+      mistakes: ['골반이 좌우로 크게 흔들립니다.', '엉덩이가 솟습니다.'],
+      easier: '무릎을 대고 합니다.', harder: '속도를 일정하게 유지하며 횟수를 늘립니다.',
+      defaults: R(3, 10, 60) },
+    { id: 'side-plank-hip-dip', name: '사이드 플랭크 힙딥', level: 3, view: 'front', props: ['mat'],
+      poses: [P({ torso: 105, armF: [5, 90], armB: [178, 178], legF: [-75, -75], legB: [-75, -75], t: 1, breath: 'out' }), P({ torso: 96, armF: [5, 90], armB: [178, 178], legF: [-84, -84], legB: [-84, -84], t: 1, breath: 'in' })],
+      steps: ['팔꿈치를 대고 사이드 플랭크 자세를 만듭니다.', '골반을 바닥 가까이 천천히 내립니다.', '옆구리 힘으로 다시 골반을 높이 들어 올립니다.', '방향을 바꿔 반복합니다.'],
+      breathing: '올릴 때 내쉬고, 내릴 때 들이쉽니다.',
+      mistakes: ['어깨가 귀 쪽으로 솟습니다.', '몸이 앞으로 기웁니다.'],
+      easier: '아래쪽 무릎을 대고 합니다.', harder: '위쪽 다리를 들고 합니다.',
+      defaults: R(3, 12, 45) },
+  ]);
+
+  /* ============ 스트레칭 (4) ============ */
+  const STR = S(1, 30, 5);
+  add('스트레칭', '스트레칭', '맨몸', [
+    { id: 'hamstring-stretch', name: '햄스트링 스트레칭', level: 1, type: 'time', props: ['mat'],
+      poses: [P({ torso: 175, legF: [90, 90], legB: [90, 90], footF: 180, footB: 180, armF: [20, 20], armB: [20, 20], t: 1.6, breath: 'hold' }), P({ torso: 118, head: 110, legF: [90, 90], legB: [90, 90], footF: 180, footB: 180, armF: [100, 100], armB: [100, 100], t: 1.6, breath: 'hold' })],
+      steps: ['바닥에 앉아 두 다리를 앞으로 쭉 폅니다.', '허리를 편 채 엉덩이부터 접듯 상체를 숙입니다.', '손이 닿는 곳까지 뻗고 허벅지 뒤가 당기는 느낌에서 멈춥니다.'],
+      breathing: '천천히 길게 내쉬며 조금씩 더 숙입니다.',
+      mistakes: ['등을 둥글게 말아 억지로 숙입니다.', '반동을 줍니다.'],
+      easier: '무릎을 살짝 굽힙니다.', harder: '발끝을 몸 쪽으로 당깁니다.',
+      defaults: STR },
+    { id: 'chest-stretch', name: '가슴 스트레칭', level: 1, type: 'time',
+      poses: [P({ armF: [-15, -15], armB: [-15, -15], t: 1.6, breath: 'hold' }), P({ torso: 174, head: 186, armF: [-48, -48], armB: [-48, -48], t: 1.6, breath: 'hold' })],
+      steps: ['바르게 서서 두 손을 등 뒤에서 깍지 낍니다.', '어깨를 뒤로 모으며 팔을 천천히 들어 올립니다.', '가슴이 펴지는 느낌에서 멈춥니다.'],
+      breathing: '가슴을 펴고 깊게 들이쉰 뒤 천천히 내쉽니다.',
+      mistakes: ['허리를 뒤로 꺾습니다.', '어깨가 귀 쪽으로 솟습니다.'],
+      easier: '깍지 대신 수건 양끝을 잡습니다.', harder: '문틀을 짚고 몸을 앞으로 내밉니다.',
+      defaults: STR },
+    { id: 'hip-flexor-stretch', name: '고관절 스트레칭', level: 1, type: 'time', props: ['mat'],
+      poses: [P({ legF: [85, 0], legB: [-15, -95], footB: -95, t: 1.6, breath: 'hold' }), P({ hip: [105, 90], legF: [80, -8], legB: [-22, -95], footB: -95, t: 1.6, breath: 'hold' })],
+      steps: ['한쪽 무릎을 바닥에 대고 반대 발은 앞에 둡니다.', '상체를 세운 채 골반을 천천히 앞으로 밉니다.', '뒷다리 허벅지 앞이 당기는 느낌에서 멈춥니다.', '다리를 바꿔 반복합니다.'],
+      breathing: '편하게 길게 숨을 쉽니다.',
+      mistakes: ['허리를 뒤로 꺾습니다.', '앞무릎이 발끝보다 너무 나갑니다.'],
+      easier: '뒷무릎 아래 수건을 깝니다.', harder: '뒷다리 쪽 팔을 머리 위로 뻗습니다.',
+      defaults: STR },
+    { id: 'childs-pose', name: '등 스트레칭(아기 자세)', level: 1, type: 'time', props: ['mat'],
+      poses: [P(Object.assign({ t: 1.6, breath: 'hold' }, QUAD)), P({ hip: [80, 90], torso: 78, head: 88, legF: [50, -90], legB: [50, -90], footF: -90, footB: -90, armF: [80, 80], armB: [80, 80], t: 1.8, breath: 'hold' })],
+      steps: ['네발 자세에서 엉덩이를 뒤꿈치 쪽으로 천천히 보냅니다.', '팔은 앞으로 길게 뻗고 이마를 바닥 가까이 둡니다.', '등과 어깨가 늘어나는 느낌으로 머뭅니다.'],
+      breathing: '등이 부풀도록 깊게 들이쉬고 천천히 내쉽니다.',
+      mistakes: ['어깨에 힘이 들어갑니다.', '무릎이 아픈데 억지로 앉습니다.'],
+      easier: '무릎을 넓게 벌립니다.', harder: '손을 한쪽으로 옮겨 옆구리까지 늘립니다.',
+      defaults: STR },
+  ]);
+
   window.EXERCISES = E;
 })();

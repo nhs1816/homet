@@ -10,20 +10,20 @@
   const ROLES = {
     squat: ['squat', 'goblet-squat', 'wide-squat', 'sumo-deadlift', 'jump-squat', 'wall-sit'],
     hinge: ['glute-bridge', 'romanian-deadlift', 'single-leg-bridge', 'single-leg-deadlift', 'db-swing'],
-    single: ['reverse-lunge', 'step-up', 'db-lunge', 'side-lunge', 'forward-lunge', 'curtsy-lunge', 'db-step-up', 'bulgarian-split-squat'],
-    push: ['knee-push-up', 'incline-push-up', 'push-up', 'floor-press', 'shoulder-press', 'wide-push-up', 'chair-dip', 'diamond-push-up', 'pike-push-up', 'decline-push-up', 'arnold-press'],
+    single: ['reverse-lunge', 'step-up', 'db-lunge', 'side-lunge', 'forward-lunge', 'curtsy-lunge', 'db-step-up', 'bulgarian-split-squat', 'pistol-squat'],
+    push: ['knee-push-up', 'incline-push-up', 'push-up', 'floor-press', 'shoulder-press', 'wide-push-up', 'chair-dip', 'diamond-push-up', 'pike-push-up', 'decline-push-up', 'arnold-press', 'archer-push-up'],
     pull: ['one-arm-row', 'superman', 'bent-over-row', 'reverse-snow-angel', 'prone-cobra', 'reverse-fly', 'ytw-raise'],
     arms: ['db-curl', 'lateral-raise', 'hammer-curl', 'triceps-kickback', 'front-raise', 'overhead-triceps', 'concentration-curl', 'shrug', 'floor-fly', 'pullover'],
-    core: ['dead-bug', 'plank', 'bird-dog', 'side-plank', 'crunch', 'heel-touch', 'bicycle-crunch', 'reverse-crunch', 'plank-shoulder-tap', 'russian-twist', 'scissor-kick', 'leg-raise', 'mountain-climber', 'hollow-hold', 'v-up'],
-    acc: ['calf-raise', 'clamshell', 'fire-hydrant', 'donkey-kick', 'db-calf-raise'],
+    core: ['dead-bug', 'plank', 'bird-dog', 'side-plank', 'crunch', 'heel-touch', 'bicycle-crunch', 'reverse-crunch', 'plank-shoulder-tap', 'russian-twist', 'scissor-kick', 'leg-raise', 'mountain-climber', 'hollow-hold', 'v-up', 'plank-up-down', 'side-plank-hip-dip'],
+    acc: ['calf-raise', 'clamshell', 'fire-hydrant', 'donkey-kick', 'db-calf-raise', 'single-leg-calf-raise'],
     cardio: ['jumping-jack', 'mountain-climber', 'bear-crawl', 'inchworm', 'burpee', 'squat-to-press', 'man-maker'],
   };
 
   /* 몸 상태별로 빼는 운동 */
   const AVOID = {
-    knee: ['jump-squat', 'forward-lunge', 'curtsy-lunge', 'side-lunge', 'bulgarian-split-squat', 'db-lunge', 'wall-sit', 'burpee', 'man-maker', 'jumping-jack'],
+    knee: ['jump-squat', 'forward-lunge', 'curtsy-lunge', 'side-lunge', 'bulgarian-split-squat', 'db-lunge', 'wall-sit', 'burpee', 'man-maker', 'jumping-jack', 'pistol-squat'],
     back: ['romanian-deadlift', 'single-leg-deadlift', 'sumo-deadlift', 'bent-over-row', 'db-swing', 'man-maker', 'superman', 'v-up', 'leg-raise', 'russian-twist', 'scissor-kick', 'hollow-hold', 'burpee', 'inchworm'],
-    wrist: ['push-up', 'knee-push-up', 'incline-push-up', 'decline-push-up', 'wide-push-up', 'diamond-push-up', 'pike-push-up', 'chair-dip', 'plank-shoulder-tap', 'mountain-climber', 'burpee', 'bear-crawl', 'inchworm', 'man-maker', 'bird-dog', 'donkey-kick', 'fire-hydrant'],
+    wrist: ['push-up', 'knee-push-up', 'incline-push-up', 'decline-push-up', 'wide-push-up', 'diamond-push-up', 'pike-push-up', 'chair-dip', 'plank-shoulder-tap', 'mountain-climber', 'burpee', 'bear-crawl', 'inchworm', 'man-maker', 'bird-dog', 'donkey-kick', 'fire-hydrant', 'archer-push-up', 'plank-up-down'],
     bp: ['decline-push-up', 'pike-push-up', 'wall-sit', 'hollow-hold', 'man-maker', 'burpee', 'v-up'],
     reflux: ['decline-push-up', 'pike-push-up', 'inchworm', 'burpee', 'leg-raise', 'v-up', 'hollow-hold', 'reverse-crunch', 'crunch', 'bicycle-crunch', 'man-maker', 'jump-squat'],
   };

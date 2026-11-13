@@ -222,6 +222,7 @@ textarea,.field{width:100%;border:1px solid var(--line);background:var(--surface
 .next-prev{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
 .next-prev .thumb{width:64px;flex:none}
 .run-top .spk{display:grid;place-items:center;color:var(--ink)}
+.blocktag{align-self:center;background:var(--accent-soft);color:var(--accent);font-weight:700;font-size:12px;border-radius:999px;padding:3px 10px}
 .sugline{text-align:center;font-size:13px;color:var(--muted)}
 .sugline.up{color:var(--ok);font-weight:600}
 .feel{display:flex;flex-direction:column;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px}
@@ -277,10 +278,10 @@ html{-webkit-text-size-adjust:100%}
   <button data-go="log"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>기록</button>
 </div></nav>
 
-<script src="logic.js?v=202611131023"></script>
-<script src="figure.js?v=202611131023"></script>
-<script src="exercises.js?v=202611131023"></script>
-<script src="planner.js?v=202611131023"></script>
+<script src="logic.js?v=202611131027"></script>
+<script src="figure.js?v=202611131027"></script>
+<script src="exercises.js?v=202611131027"></script>
+<script src="planner.js?v=202611131027"></script>
 <script>
 (function () {
 'use strict';
@@ -424,6 +425,7 @@ function renderToday() {
     card.append(h('div', { class: 'row muted small' }, h('span', { class: 'grow', text: '운동 ' + day.items.length + '개' }), h('span', { text: '약 ' + estMin(day.items) + '분' })));
     card.append(h('ul', { class: 'routine' }, day.items.map(it => h('li', {}, h('span', { text: it.name }), h('span', { class: 'muted small', text: it.sets + '×' + amountText(it) + (it.kg ? ' · ' + it.kg + 'kg' : '') })))));
     card.append(h('button', { class: 'btn primary big', onclick: () => startRun(day.items), text: doneToday ? '한 번 더 하기' : '시작' }));
+    card.append(h('button', { class: 'btn ghost', style: 'width:100%;margin-top:8px', onclick: () => startRun(Logic.quickRoutine(day.items), { quick: true }), text: '10분만 하기 (운동 3개 × 2세트)' }));
   } else {
     const next = nextDay(dk);
     card.append(h('p', { class: 'muted', style: 'margin:0 0 12px', text: next ? '다음 운동은 ' + DAY_KO[next] + '요일이에요.' : '아직 시간표가 비어 있어요. 시간표에서 요일별 운동을 넣어 주세요.' }));
@@ -607,7 +609,7 @@ function renderLib() {
     return h('button', { class: 'chip' + (F[key] === val ? ' on' : ''), onclick: () => { F[key] = val; renderLib(); }, text: txt });
   }));
   root.append(h('div', { class: 'filters' },
-    row(['전체', '하체', '가슴·어깨', '등', '팔', '코어', '전신'], 'part', '부위'),
+    row(['전체', '하체', '가슴·어깨', '등', '팔', '코어', '전신', '스트레칭'], 'part', '부위'),
     h('div', { class: 'chips' },
       ['전체', '맨몸', '아령', '의자'].map(v => h('button', { class: 'chip' + (F.equip === v ? ' on' : ''), onclick: () => { F.equip = v; renderLib(); }, text: v === '전체' ? '도구 전체' : v })),
       [[0, '난이도 전체'], [1, '쉬움'], [2, '보통'], [3, '어려움']].map(([v, t]) => h('button', { class: 'chip' + (F.level === v ? ' on' : ''), onclick: () => { F.level = v; renderLib(); }, text: t })),
@@ -962,6 +964,8 @@ function openSettings() {
     const tseg = h('div', { class: 'seg', role: 'group', 'aria-label': '같이 세기 속도' });
     const drawT = () => { clear(tseg); [['slow', '느리게 4초'], ['normal', '보통 3초'], ['fast', '빠르게 2초']].forEach(([v, t]) => tseg.append(h('button', { class: (st.tempo || 'normal') === v ? 'on' : '', onclick: () => { st.tempo = v; save(); drawT(); }, text: t }))); };
     drawT();
+    const ws = h('button', { class: 'switch' + (st.warmup ? ' on' : ''), role: 'switch', 'aria-checked': String(!!st.warmup), 'aria-label': '워밍업·마무리', onclick: () => { st.warmup = !st.warmup; save(); ws.classList.toggle('on', st.warmup); ws.setAttribute('aria-checked', String(st.warmup)); } });
+    body.append(h('div', { class: 'toggle' }, h('div', {}, h('div', { text: '워밍업·마무리 스트레칭' }), h('div', { class: 'small muted', text: '운동 앞에 3분 워밍업, 뒤에 2분 스트레칭을 붙여요. 운동 중 건너뛸 수 있어요.' })), ws));
     const tempoRow = h('div', { class: 'toggle', style: 'flex-direction:column;align-items:stretch;gap:4px' }, h('span', { text: '같이 세기 속도 (한 회에 걸리는 시간)' }), tseg);
     const vs = h('button', { class: 'switch' + (st.voice ? ' on' : ''), role: 'switch', 'aria-checked': String(st.voice), 'aria-label': '음성 안내', onclick: () => {
       st.voice = !st.voice; save(); vs.classList.toggle('on', st.voice); vs.setAttribute('aria-checked', String(st.voice));
@@ -1039,6 +1043,7 @@ const SPK_OFF = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" str
 let run = null, runEl = null, runFig = null, runFigKey = '', tick = 0, wake = null, adj = null;
 function withSuggestion(it) {
   const o = JSON.parse(JSON.stringify(it));
+  if (o.block) return o;
   const g = Logic.suggest(o, S.sessions);
   o.sug = g;
   if (o.mode !== 'amrap') {
@@ -1046,9 +1051,16 @@ function withSuggestion(it) {
   }
   return o;
 }
-function startRun(items) {
+function avoidIds() {
+  const o = plannerOpts(), ids = [];
+  for (const a of o.avoid || []) for (const id of (Planner.AVOID[a] || [])) ids.push(id);
+  return ids;
+}
+function startRun(items, opts) {
   unlockVoice();
-  const r = Logic.createRun(items.map(withSuggestion), lookup, Date.now());
+  let list = items.map(withSuggestion);
+  if (S.settings.warmup && !(opts && opts.quick)) list = Logic.withWarmup(list, lookup, avoidIds());
+  const r = Logic.createRun(list, lookup, Date.now());
   if (r.phase === 'done') { toast('운동이 비어 있어요.'); return; }
   run = r; persist(); openRun();
 }
@@ -1121,6 +1133,7 @@ function drawRun() {
     if (!run.timerEndAt && !run.awaitCount && announced !== akey) { announced = akey; speak(it.name + '. ' + run.set + '세트, ' + spokenAmount(it), false); }
     const g = it.sug || {};
     const arrow = g.dir === 'up' ? ' ↑' : g.dir === 'down' ? ' ↓' : '';
+    if (it.block) body.append(h('div', { class: 'blocktag', text: it.block === 'warm' ? '워밍업' : '마무리 스트레칭' }));
     body.append(h('h2', { text: it.name }), h('div', { class: 'target', text: run.set + ' / ' + it.sets + '세트 · ' + target(it) + arrow }));
     if (g.dir === 'up') body.append(h('div', { class: 'sugline up', text: g.note + ' · +' + (it.type === 'time' ? '5초' : '1회') }));
     else if (g.dir === 'down') body.append(h('div', { class: 'sugline', text: g.note }));
@@ -1169,7 +1182,9 @@ function drawRun() {
   inner.append(h('div', { class: 'run-nav' },
     h('button', { disabled: run.i === 0, onclick: () => { run = Logic.prevExercise(run); clearTimer(); persist(); drawRun(); }, text: '‹ 이전 운동' }),
     canSwap ? h('button', { onclick: openSwap, text: '다른 운동으로' }) : null,
-    h('button', { onclick: () => { run = Logic.skipExercise(run, Date.now()); clearTimer(); persist(); drawRun(); }, text: '운동 건너뛰기 ›' })));
+    (cur() && cur().block)
+      ? h('button', { onclick: () => { run = Logic.skipBlock(run); clearTimer(); counting = null; persist(); drawRun(); }, text: (cur().block === 'warm' ? '워밍업' : '마무리') + ' 건너뛰기 ›' })
+      : h('button', { onclick: () => { run = Logic.skipExercise(run, Date.now()); clearTimer(); persist(); drawRun(); }, text: '운동 건너뛰기 ›' })));
 }
 function swapItem(old, ex) {
   const it = { exId: ex.id, name: ex.name, type: ex.type, sets: old.sets, rest: old.rest };
@@ -1284,11 +1299,11 @@ function onTick() {
 function doneSet(result) {
   const before = run.i;
   run = Logic.completeSet(run, result, Date.now());
-  if (run.i !== before || run.phase === 'done') run.feelFor = before;
+  if ((run.i !== before || run.phase === 'done') && !run.items[before].block) run.feelFor = before;
   if (run.phase === 'rest') {
     run.restTotal = Logic.restRemaining(run, Date.now());
     const nx = cur();
-    const pre = run.i !== before ? run.log[before].name + ' 끝. 어땠는지 눌러 주세요. ' : '';
+    const pre = run.i !== before && !run.items[before].block ? run.log[before].name + ' 끝. 어땠는지 눌러 주세요. ' : '';
     if (run.restTotal > 0) speak(pre + run.restTotal + '초 쉬어요. 다음은 ' + nx.name + ' ' + run.set + '세트.', true);
   } else if (run.phase === 'done') speak('수고했어요. 오늘 운동 끝!', true);
   adj = null; persist(); drawRun();
@@ -1340,7 +1355,7 @@ function drawSummary(body) {
   const fb = feelBox(); if (fb) body.append(fb);
   const next = [];
   for (const it of run.items) {
-    if (it.mode === 'amrap' || !s.items.some(x => x.exId === it.exId)) continue;
+    if (it.block || it.mode === 'amrap' || !s.items.some(x => x.exId === it.exId)) continue;
     const key = it.type === 'time' ? 'sec' : 'reps';
     const baseIt = Object.assign({}, it); baseIt[key] = it.base == null ? it[key] : it.base;
     const g = Logic.suggest(baseIt, S.sessions);

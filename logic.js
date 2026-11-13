@@ -120,7 +120,7 @@
       set: 1,
       phase: list.length ? 'work' : 'done',
       restEndAt: 0,
-      log: list.map(it => ({ exId: it.exId, name: it.name, sets: [], mode: it.mode === 'amrap' ? 'amrap' : 'reps', target: targetOf(it) })),
+      log: list.map(it => Object.assign({ exId: it.exId, name: it.name, sets: [], mode: it.mode === 'amrap' ? 'amrap' : 'reps', target: targetOf(it) }, it.block ? { block: it.block } : {})),
       startedAt: now,
     };
   }
@@ -169,7 +169,7 @@
       date: ymd(new Date(run.startedAt)),
       start: run.startedAt,
       end: now,
-      items: run.log.filter(x => x.sets.length).map(x => {
+      items: run.log.filter(x => x.sets.length && !x.block).map(x => {
         const o = { exId: x.exId, name: x.name, sets: x.sets };
         if (x.target) o.target = x.target;
         if (x.mode === 'amrap') o.mode = 'amrap';
@@ -187,6 +187,8 @@
     'squat': '고블릿 스쿼트', 'wide-squat': '고블릿 스쿼트', 'glute-bridge': '싱글레그 힙브릿지',
     'reverse-lunge': '불가리안 스플릿 스쿼트', 'step-up': '덤벨 스텝업', 'superman': 'Y-T-W 레이즈',
     'dead-bug': '할로우 홀드', 'crunch': 'V업', 'calf-raise': '한 발 카프 레이즈',
+    'diamond-push-up': '아처 푸시업', 'bulgarian-split-squat': '피스톨 스쿼트(의자 보조)',
+    'plank': '플랭크 업다운', 'side-plank': '사이드 플랭크 힙딥',
   };
   function suggest(item, sessions) {
     const id = item.exId;
@@ -245,6 +247,42 @@
     r.log[i] = { exId: it.exId, name: it.name, sets: [], mode: it.mode === 'amrap' ? 'amrap' : 'reps', target: targetOf(it) };
     if (i === r.i) r.set = 1;
     return r;
+  }
+
+  /* ---------- 워밍업·마무리, 10분 루틴 ---------- */
+  const WARM = [['jumping-jack', { sec: 40 }], ['inchworm', { reps: 5 }], ['bird-dog', { reps: 8 }], ['glute-bridge', { reps: 10 }]];
+  const WARM_ALT = [['calf-raise', { reps: 15 }], ['dead-bug', { reps: 8 }], ['squat', { reps: 10 }]];
+  const COOL = ['hamstring-stretch', 'chest-stretch', 'hip-flexor-stretch', 'childs-pose'];
+  function withWarmup(items, exLookup, avoidIds) {
+    const avoid = new Set(avoidIds || []);
+    const mk = (id, amt, block, rest) => {
+      const ex = exLookup(id);
+      if (!ex || avoid.has(id)) return null;
+      const it = { exId: id, name: ex.name, type: ex.type || 'reps', sets: 1, rest, block };
+      if (it.type === 'time') it.sec = amt.sec || 30; else it.reps = amt.reps || 10;
+      return it;
+    };
+    const warm = [];
+    for (const [id, amt] of WARM.concat(WARM_ALT)) { if (warm.length >= 4) break; const it = mk(id, amt, 'warm', 10); if (it) warm.push(it); }
+    const cool = COOL.map(id => mk(id, { sec: 30 }, 'cool', 5)).filter(Boolean);
+    return warm.concat(items, cool);
+  }
+  function skipBlock(run) {
+    const r = clone(run);
+    const b = r.items[r.i] && r.items[r.i].block;
+    if (!b) return r;
+    let j = r.i;
+    while (j < r.items.length && r.items[j].block === b) j++;
+    if (j >= r.items.length) r.phase = 'done';
+    else { r.i = j; r.set = 1; r.phase = 'work'; }
+    return r;
+  }
+  function quickRoutine(items) {
+    return (items || []).filter(x => !x.block).slice(0, 3).map(x => {
+      const o = Object.assign({}, x, { sets: Math.min(2, x.sets || 2), rest: 30 });
+      if (o.type === 'time' || o.mode === 'amrap') o.sec = Math.min(o.sec || 30, 30);
+      return o;
+    });
   }
 
   /* ---------- 지난 기록 고치기 ---------- */
@@ -354,6 +392,6 @@
     createRun, completeSet, addRest, restRemaining, finishRest, skipExercise, prevExercise, endRun,
     validateBackup, setFeel, suggest, targetOf, cue,
     weeklySeries, exerciseSeries, exerciseList, upsertBody, bodySeries,
-    TEMPO_SEC, koCount, swapExercise, editSession,
+    TEMPO_SEC, koCount, swapExercise, editSession, withWarmup, skipBlock, quickRoutine,
   };
 })();
