@@ -16,6 +16,9 @@
       sessions: [],
       body: [],
       activeRun: null,
+      restWeeks: [],
+      routines: [],
+      activeRoutine: '',
     };
   }
 
@@ -60,6 +63,10 @@
     if (Array.isArray(o.sessions)) s.sessions = o.sessions.filter(okSession);
     if (Array.isArray(o.body)) s.body = o.body.map(cleanBody).filter(Boolean);
     if (isObj(o.activeRun)) s.activeRun = o.activeRun;
+    if (Array.isArray(o.restWeeks)) s.restWeeks = o.restWeeks.filter(x => typeof x === 'string' && DATE.test(x));
+    if (Array.isArray(o.routines)) s.routines = o.routines.filter(r => isObj(r) && typeof r.id === 'string' && typeof r.name === 'string' && isObj(r.schedule) && DAYS.every(d => isObj(r.schedule[d]) && Array.isArray(r.schedule[d].items)))
+      .map(r => ({ id: r.id, name: r.name, schedule: Object.fromEntries(DAYS.map(d => [d, { note: typeof r.schedule[d].note === 'string' ? r.schedule[d].note : '', items: r.schedule[d].items.filter(okItem) }])) }));
+    if (typeof o.activeRoutine === 'string') s.activeRoutine = o.activeRoutine;
     return s;
   }
 
@@ -86,10 +93,15 @@
     for (const x of sessions) if (x.date >= a && x.date <= b) set.add(x.date);
     return set.size;
   }
-  function streakWeeks(sessions, goal, today) {
+  function streakWeeks(sessions, goal, today, restWeeks) {
+    const rest = new Set(restWeeks || []);
     let n = 0, w = addDays(weekStart(today), -7);
-    for (let guard = 0; guard < 600 && weekCount(sessions, w) >= goal; guard++) { n++; w = addDays(w, -7); }
-    if (weekCount(sessions, today) >= goal) n++;
+    for (let guard = 0; guard < 600; guard++) {
+      if (rest.has(w)) { w = addDays(w, -7); continue; } // 쉬어가는 주: 세지도 끊지도 않음
+      if (weekCount(sessions, w) < goal) break;
+      n++; w = addDays(w, -7);
+    }
+    if (!rest.has(weekStart(today)) && weekCount(sessions, today) >= goal) n++;
     return n;
   }
   function lastRecord(sessions, exId) {
@@ -307,6 +319,116 @@
     return out;
   }
 
+  /* ---------- 쉬어가기 ---------- */
+  function canRest(restWeeks, ws) {
+    const list = restWeeks || [];
+    if (list.includes(ws)) return false;
+    return !list.some(w => w.slice(0, 7) === ws.slice(0, 7));
+  }
+
+  /* ---------- 배지 ---------- */
+  const BADGES = [
+    ['first', '첫걸음', '첫 운동을 기록했어요'],
+    ['count10', '열 번째', '운동 10회'], ['count30', '서른 번째', '운동 30회'], ['count50', '쉰 번째', '운동 50회'], ['count100', '백 번째', '운동 100회'],
+    ['streak4', '한 달 꾸준', '주간 목표 4주 연속'], ['streak8', '두 달 꾸준', '주간 목표 8주 연속'], ['streak12', '석 달 꾸준', '주간 목표 12주 연속'],
+    ['reps20', '20회 돌파', '한 세트 20회 이상'], ['plank60', '1분 버티기', '시간 운동 한 세트 60초 이상'],
+  ];
+  function badges(sessions, goal, today, restWeeks) {
+    const got = {};
+    const list = sessions.slice().sort((a, b) => (a.date + String(a.start || 0).padStart(15, '0')).localeCompare(b.date + String(b.start || 0).padStart(15, '0')));
+    list.forEach((s, i) => {
+      const n = i + 1;
+      if (n === 1) got.first = s.date;
+      for (const c of [10, 30, 50, 100]) if (n === c) got['count' + c] = s.date;
+      for (const x of s.items || []) for (const st of x.sets || []) {
+        if (!got.reps20 && x.mode !== 'amrap' && (st.reps || 0) >= 20) got.reps20 = s.date;
+        if (!got.plank60 && (st.sec || 0) >= 60) got.plank60 = s.date;
+      }
+    });
+    if (list.length) {
+      const rest = new Set(restWeeks || []);
+      let run = 0, w = weekStart(list[0].date);
+      const end = weekStart(today);
+      for (let guard = 0; guard < 1000 && w <= end; guard++) {
+        if (!rest.has(w)) {
+          if (weekCount(sessions, w) >= goal) {
+            run++;
+            const lastDay = list.filter(s => s.date >= w && s.date <= addDays(w, 6)).map(s => s.date).sort().pop();
+            for (const c of [4, 8, 12]) if (run === c && !got['streak' + c]) got['streak' + c] = lastDay;
+          } else if (w !== end) run = 0;
+        }
+        w = addDays(w, 7);
+      }
+    }
+    return BADGES.map(([id, name, desc]) => ({ id, name, desc, date: got[id] || null }));
+  }
+
+  /* ---------- 월간 리포트 ---------- */
+  function monthReport(sessions, body, ym) {
+    const [y, m] = ym.split('-').map(Number);
+    const prev = (m === 1 ? (y - 1) + '-12' : y + '-' + String(m - 1).padStart(2, '0'));
+    const stat = key => {
+      const ss = sessions.filter(s => s.date.startsWith(key));
+      return { days: new Set(ss.map(s => s.date)).size, sets: ss.reduce((a, s) => a + (s.items || []).reduce((b, x) => b + (x.sets || []).length, 0), 0), ss };
+    };
+    const cur = stat(ym), pv = stat(prev);
+    let top = null;
+    const ids = new Set();
+    for (const s of cur.ss) for (const x of s.items || []) if (x.mode !== 'amrap') ids.add(x.exId);
+    for (const id of ids) {
+      const ser = exerciseSeries(cur.ss, id, 'reps');
+      if (ser.length < 2) continue;
+      const gain = ser[ser.length - 1].value - ser[0].value;
+      if (gain > 0 && (!top || gain > top.to - top.from)) {
+        const any = cur.ss.flatMap(s => s.items).find(x => x.exId === id);
+        const isSec = any.sets.some(st => st.sec != null);
+        top = { exId: id, name: any.name || id, from: ser[0].value, to: ser[ser.length - 1].value, unit: isSec ? '초' : '회' };
+      }
+    }
+    const bw = bodySeries(body, 'weight').filter(x => x.date.startsWith(ym));
+    return { days: cur.days, sets: cur.sets, prevDays: pv.days, prevSets: pv.sets, topGain: top, weight: bw.length >= 2 ? { from: bw[0].value, to: bw[bw.length - 1].value } : null };
+  }
+
+  /* ---------- 루틴 여러 개 ---------- */
+  function ensureRoutines(st) {
+    const s = clone(st);
+    if (!s.routines || !s.routines.length) { s.routines = [{ id: 'r1', name: '기본 주간', schedule: clone(s.schedule) }]; s.activeRoutine = 'r1'; }
+    if (!s.routines.some(r => r.id === s.activeRoutine)) { s.activeRoutine = s.routines[0].id; s.schedule = clone(s.routines[0].schedule); }
+    return s;
+  }
+  function syncRoutine(s) {
+    const r = (s.routines || []).find(x => x.id === s.activeRoutine);
+    if (r) r.schedule = clone(s.schedule);
+    return s;
+  }
+  function switchRoutine(st, id) {
+    const s = syncRoutine(clone(st));
+    const r = s.routines.find(x => x.id === id);
+    if (!r) return s;
+    s.activeRoutine = id; s.schedule = clone(r.schedule);
+    return s;
+  }
+  function addRoutine(st, name) {
+    const s = syncRoutine(clone(st));
+    const id = 'r' + Date.now().toString(36) + s.routines.length;
+    s.routines.push({ id, name: name || '새 루틴', schedule: clone(s.schedule) });
+    s.activeRoutine = id;
+    return s;
+  }
+  function renameRoutine(st, id, name) {
+    const s = clone(st);
+    const r = s.routines.find(x => x.id === id);
+    if (r && name) r.name = name;
+    return s;
+  }
+  function removeRoutine(st, id) {
+    if (st.routines.length <= 1) return clone(st);
+    let s = syncRoutine(clone(st));
+    s.routines = s.routines.filter(x => x.id !== id);
+    if (s.activeRoutine === id) { s.activeRoutine = s.routines[0].id; s.schedule = clone(s.routines[0].schedule); }
+    return s;
+  }
+
   /* ---------- 진행 그래프 계산 ---------- */
   function weeklySeries(sessions, today, n) {
     const ws = weekStart(today), out = [];
@@ -382,6 +504,7 @@
     if (!o.sessions.every(okSession)) return { ok: false, error: '운동 기록 중 읽을 수 없는 것이 있어요.' };
     if (o.settings != null && !okSettings(o.settings)) return { ok: false, error: '설정 값이 올바르지 않아요.' };
     if (o.body != null && !Array.isArray(o.body)) return { ok: false, error: '몸 기록 형식이 올바르지 않아요.' };
+    if (o.routines != null && !Array.isArray(o.routines)) return { ok: false, error: '루틴 형식이 올바르지 않아요.' };
     return { ok: true };
   }
 
@@ -393,5 +516,6 @@
     validateBackup, setFeel, suggest, targetOf, cue,
     weeklySeries, exerciseSeries, exerciseList, upsertBody, bodySeries,
     TEMPO_SEC, koCount, swapExercise, editSession, withWarmup, skipBlock, quickRoutine,
+    canRest, badges, monthReport, ensureRoutines, syncRoutine, switchRoutine, addRoutine, renameRoutine, removeRoutine,
   };
 })();

@@ -223,6 +223,11 @@ textarea,.field{width:100%;border:1px solid var(--line);background:var(--surface
 .next-prev .thumb{width:64px;flex:none}
 .run-top .spk{display:grid;place-items:center;color:var(--ink)}
 .blocktag{align-self:center;background:var(--accent-soft);color:var(--accent);font-weight:700;font-size:12px;border-radius:999px;padding:3px 10px}
+.linkbtn{border:none;background:none;color:var(--accent);font-weight:600;padding:4px 0;font-size:14px}
+.badges{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px}
+.badge{display:flex;flex-direction:column;gap:2px;border:1px solid var(--line);border-radius:12px;padding:8px 10px;opacity:.55}
+.badge.got{opacity:1;border-color:var(--accent);background:var(--accent-soft)}
+.badge .medal{color:var(--accent);font-size:18px;line-height:1}
 .sugline{text-align:center;font-size:13px;color:var(--muted)}
 .sugline.up{color:var(--ok);font-weight:600}
 .feel{display:flex;flex-direction:column;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px}
@@ -278,10 +283,10 @@ html{-webkit-text-size-adjust:100%}
   <button data-go="log"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>기록</button>
 </div></nav>
 
-<script src="logic.js?v=202611131027"></script>
-<script src="figure.js?v=202611131027"></script>
-<script src="exercises.js?v=202611131027"></script>
-<script src="planner.js?v=202611131027"></script>
+<script src="logic.js?v=202611131030"></script>
+<script src="figure.js?v=202611131030"></script>
+<script src="exercises.js?v=202611131030"></script>
+<script src="planner.js?v=202611131030"></script>
 <script>
 (function () {
 'use strict';
@@ -306,9 +311,10 @@ const DAY_KO = { mon: '월', tue: '화', wed: '수', thu: '목', fri: '금', sat
 const LV = ['', '쉬움', '보통', '어려움'];
 const todayYmd = () => Logic.ymd(new Date());
 
-let S = Logic.loadState(Logic.readStorage());
+let S = Logic.ensureRoutines(Logic.loadState(Logic.readStorage()));
 let warned = false;
 function save() {
+  Logic.syncRoutine(S);
   if (!Logic.saveState(S) && !warned) { warned = true; toast('이 브라우저에서는 기록이 저장되지 않아요. 앱을 닫으면 사라질 수 있어요.'); }
 }
 let toastTimer = 0;
@@ -444,10 +450,17 @@ function renderToday() {
     week.append(h('div', { class: 'd' }, h('div', { class: 'dot' + (dates.has(dd) ? ' done' : '') + (dd === ymd ? ' today' : ''), 'aria-label': DAY_KO[k] + (dates.has(dd) ? ' 운동함' : '') }), DAY_KO[k]));
   });
   const cnt = Logic.weekCount(S.sessions, ymd), goal = S.settings.weeklyGoal;
-  root.append(h('h3', { text: '이번 주' }), h('div', { class: 'card' }, week,
+  const resting = S.restWeeks.includes(ws);
+  const restRow = resting
+    ? h('div', { class: 'note', style: 'display:flex;align-items:center;gap:8px;margin-top:10px' }, h('span', { class: 'grow', text: '이번 주는 쉬어가는 주예요. 연속 기록이 끊기지 않아요.' }),
+        h('button', { class: 'linkbtn', onclick: () => { S.restWeeks = S.restWeeks.filter(x => x !== ws); save(); render(); }, text: '취소' }))
+    : (cnt < goal && Logic.canRest(S.restWeeks, ws)
+      ? h('button', { class: 'linkbtn', style: 'margin-top:10px', onclick: () => ask('이번 주 쉬어가기', '아프거나 바쁜 주라면 쉬어가는 주로 표시하세요. 목표를 못 채워도 연속 기록이 끊기지 않아요. 한 달에 한 번만 쓸 수 있어요.', '쉬어가기', () => { S.restWeeks.push(ws); save(); render(); }), text: '이번 주 쉬어가기' })
+      : null);
+  root.append(h('h3', { text: '이번 주' }), h('div', { class: 'card' }, week, restRow,
     h('div', { class: 'stats' },
       h('div', { class: 'stat' }, h('span', { class: 'small muted', text: '이번 주' }), h('b', { text: cnt + ' / ' + goal + '회' })),
-      h('div', { class: 'stat' }, h('span', { class: 'small muted', text: '목표 달성 연속' }), h('b', { text: Logic.streakWeeks(S.sessions, goal, ymd) + '주' })))));
+      h('div', { class: 'stat' }, h('span', { class: 'small muted', text: '목표 달성 연속' }), h('b', { text: Logic.streakWeeks(S.sessions, goal, ymd, S.restWeeks) + '주' })))));
 }
 function nextDay(dk) {
   const i = DAYS.indexOf(dk);
@@ -470,6 +483,10 @@ let planDay = Logic.dayKey(todayYmd());
 function renderPlan() {
   const root = clear($('#plan'));
   root.append(h('h2', { text: '시간표' }), h('p', { class: 'muted small', style: 'margin:0 0 12px', text: '요일을 고르고 운동을 넣어 주세요.' }));
+  const rsel = h('select', { class: 'field', style: 'margin:0', 'aria-label': '루틴 고르기' }, S.routines.map(r => { const o = h('option', { value: r.id, text: r.name }); if (r.id === S.activeRoutine) o.selected = true; return o; }));
+  rsel.addEventListener('change', () => { S = Logic.switchRoutine(S, rsel.value); save(); toast('\'' + S.routines.find(r => r.id === S.activeRoutine).name + '\' 루틴으로 바꿨어요.'); render(); });
+  root.append(h('div', { class: 'row', style: 'margin-bottom:10px' }, h('div', { class: 'grow' }, rsel),
+    h('button', { class: 'iconbtn', 'aria-label': '루틴 관리', onclick: manageRoutines, text: '⋯' })));
   root.append(h('button', { class: 'planbtn', onclick: openPlanner, text: '맞춤 루틴 만들기' }));
   const tk = Logic.dayKey(todayYmd());
   root.append(h('div', { class: 'days' }, DAYS.map(k => h('button', { class: (k === planDay ? 'on' : '') + (k === tk ? ' today' : ''), onclick: () => { planDay = k; renderPlan(); } },
@@ -524,6 +541,23 @@ function editItem(dk, i) {
     body.append(h('div', { class: 'actions' },
       h('button', { class: 'btn ghost', onclick: () => { closeSheet(); openExercise(it.exId); }, text: '운동 설명' }),
       h('button', { class: 'btn primary', onclick: () => { save(); closeSheet(); renderPlan(); }, text: '저장' })));
+  });
+}
+
+function nameSheet(title, value, onOk) {
+  openSheet(title, body => {
+    const inp = h('input', { class: 'field', value: value || '', maxlength: 20, placeholder: '예: 출장 주간', 'aria-label': '루틴 이름' });
+    body.append(inp, h('button', { class: 'btn primary big', onclick: () => { const v = inp.value.trim(); if (!v) { toast('이름을 적어 주세요.'); return; } closeSheet(); onOk(v); }, text: '저장' }));
+    setTimeout(() => inp.focus(), 50);
+  });
+}
+function manageRoutines() {
+  const curR = S.routines.find(r => r.id === S.activeRoutine);
+  openSheet('루틴 관리', body => {
+    body.append(h('p', { class: 'small muted', style: 'margin:0 0 10px', text: '지금 루틴: ' + curR.name + '. 루틴마다 요일별 시간표가 따로 저장돼요.' }));
+    body.append(h('button', { class: 'btn ghost', style: 'width:100%;margin-bottom:8px', onclick: () => nameSheet('새 루틴 (지금 시간표 복사)', '', v => { S = Logic.addRoutine(S, v); save(); toast('\'' + v + '\' 루틴을 만들었어요.'); render(); }), text: '+ 새 루틴 만들기' }));
+    body.append(h('button', { class: 'btn ghost', style: 'width:100%;margin-bottom:8px', onclick: () => nameSheet('이름 바꾸기', curR.name, v => { S = Logic.renameRoutine(S, curR.id, v); save(); render(); }), text: '이름 바꾸기' }));
+    if (S.routines.length > 1) body.append(h('button', { class: 'btn danger', style: 'width:100%', onclick: () => ask('루틴 지우기', '\'' + curR.name + '\' 루틴을 지울까요? 지난 운동 기록은 남아요.', '지우기', () => { S = Logic.removeRoutine(S, curR.id); save(); render(); }, true), text: '이 루틴 지우기' }));
   });
 }
 
@@ -805,6 +839,26 @@ function lineChart(host, readout, series, unit, title, latest) {
   readout.textContent = word + fmtV(best.value) + ' (' + md(best.date) + ')' + (series.length === 1 ? ' · 두 번 이상 기록하면 선으로 이어져요' : '');
 }
 
+function renderReport(root) {
+  const ym = todayYmd().slice(0, 7);
+  const r = Logic.monthReport(S.sessions, S.body, ym);
+  const diff = (a, b, u) => { const d = a - b; return d > 0 ? '지난달보다 +' + d + u : d < 0 ? '지난달보다 −' + Math.abs(d) + u : '지난달과 같아요'; };
+  const lines = [
+    h('div', { class: 'ex-line' }, h('span', { text: '운동한 날' }), h('span', {}, h('b', { text: r.days + '일 ' }), h('span', { class: 'small muted', text: diff(r.days, r.prevDays, '일') }))),
+    h('div', { class: 'ex-line' }, h('span', { text: '총 세트' }), h('span', {}, h('b', { text: r.sets + '세트 ' }), h('span', { class: 'small muted', text: diff(r.sets, r.prevSets, '세트') }))),
+  ];
+  if (r.topGain) lines.push(h('div', { class: 'ex-line' }, h('span', { text: '가장 많이 는 운동' }), h('b', { text: r.topGain.name + ' ' + r.topGain.from + ' → ' + r.topGain.to + r.topGain.unit })));
+  if (r.weight) { const d = Math.round((r.weight.to - r.weight.from) * 10) / 10; lines.push(h('div', { class: 'ex-line' }, h('span', { text: '체중' }), h('b', { text: r.weight.from + ' → ' + r.weight.to + 'kg (' + (d > 0 ? '+' : d < 0 ? '−' : '±') + Math.abs(d) + ')' }))); }
+  root.append(h('div', { class: 'card', style: 'margin-bottom:14px' }, h('b', { text: Number(ym.slice(5)) + '월 리포트' }), h('div', { class: 'tbl' }, lines)));
+}
+function renderBadges(root) {
+  const list = Logic.badges(S.sessions, S.settings.weeklyGoal, todayYmd(), S.restWeeks);
+  const got = list.filter(b => b.date).length;
+  root.append(h('div', { class: 'card', style: 'margin-bottom:14px' },
+    h('div', { class: 'row' }, h('b', { class: 'grow', text: '배지' }), h('span', { class: 'small muted', text: got + ' / ' + list.length })),
+    h('div', { class: 'badges' }, list.map(b => h('div', { class: 'badge' + (b.date ? ' got' : ''), 'aria-label': b.name + (b.date ? ' 받음' : ' 아직') },
+      h('div', { class: 'medal', text: b.date ? '★' : '☆' }), h('b', { text: b.name }), h('span', { class: 'small muted', text: b.date ? b.date.slice(5).replace('-', '/') : b.desc }))))));
+}
 let graphView = 'week', graphEx = '', bodyKey = 'weight';
 const BODY = { weight: ['체중', 'kg'], muscle: ['골격근량', 'kg'], fat: ['체지방률', '%'] };
 function renderGraphs(root) {
@@ -822,7 +876,7 @@ function renderGraphs(root) {
     card.append(h('div', { class: 'stats' },
       h('div', { class: 'stat' }, h('span', { class: 'small muted', text: '이번 달 운동' }), h('b', { text: new Set(ms.map(x => x.date)).size + '일' })),
       h('div', { class: 'stat' }, h('span', { class: 'small muted', text: '이번 달 세트' }), h('b', { text: ms.reduce((a, x) => a + x.items.reduce((b, y) => b + y.sets.length, 0), 0) + '세트' })),
-      h('div', { class: 'stat' }, h('span', { class: 'small muted', text: '연속 달성' }), h('b', { text: Logic.streakWeeks(S.sessions, S.settings.weeklyGoal, todayYmd()) + '주' }))));
+      h('div', { class: 'stat' }, h('span', { class: 'small muted', text: '연속 달성' }), h('b', { text: Logic.streakWeeks(S.sessions, S.settings.weeklyGoal, todayYmd(), S.restWeeks) + '주' }))));
   } else if (graphView === 'ex') {
     const list = Logic.exerciseList(S.sessions);
     if (!list.length) { card.append(h('div', { class: 'empty', text: '운동을 기록하면 운동별 그래프가 생겨요.' })); root.append(card); return; }
@@ -885,6 +939,8 @@ function renderLog() {
   const root = clear($('#log'));
   root.append(h('h2', { text: '기록' }));
   renderGraphs(root);
+  renderReport(root);
+  renderBadges(root);
   const [y, m] = calMonth.split('-').map(Number);
   const dates = new Set(S.sessions.map(s => s.date));
   const monthCount = new Set(S.sessions.filter(s => s.date.startsWith(calMonth)).map(s => s.date)).size;
@@ -1008,7 +1064,7 @@ function importBackup(f) {
     const v = Logic.validateBackup(o);
     if (!v.ok) { toast('가져오지 못했어요: ' + (o ? v.error : 'JSON 파일이 아니에요.') + ' 기존 기록은 그대로예요.'); return; }
     ask('백업 가져오기', '지금 기록과 시간표를 백업 파일 내용으로 바꿀까요? (기록 ' + o.sessions.length + '개)', '바꾸기', () => {
-      S = Logic.loadState(JSON.stringify(o)); S.activeRun = null; save(); toast('백업을 가져왔어요.'); render();
+      S = Logic.ensureRoutines(Logic.loadState(JSON.stringify(o))); S.activeRun = null; save(); toast('백업을 가져왔어요.'); render();
     });
   };
   r.readAsText(f);
@@ -1353,6 +1409,10 @@ function drawSummary(body) {
     h('div', { class: 'stat' }, h('span', { class: 'small muted', text: '이번 주' }), h('b', { text: Logic.weekCount(S.sessions, todayYmd()) + '회' }))));
   body.append(h('ul', { class: 'sum' }, s.items.map(it => h('li', {}, h('span', { text: it.name }), h('span', { class: 'muted small', text: setsText(it.sets) })))));
   const fb = feelBox(); if (fb) body.append(fb);
+  const nowB = Logic.badges(S.sessions, S.settings.weeklyGoal, todayYmd(), S.restWeeks).filter(b => b.date);
+  const beforeB = new Set(Logic.badges(S.sessions.filter(x => x.id !== s.id), S.settings.weeklyGoal, todayYmd(), S.restWeeks).filter(b => b.date).map(b => b.id));
+  const fresh = nowB.filter(b => !beforeB.has(b.id));
+  if (fresh.length) body.append(h('div', { class: 'feel' }, h('b', { text: '새 배지를 받았어요' }), h('div', { class: 'qchips', style: 'justify-content:center' }, fresh.map(b => h('span', { class: 'chip on', text: '★ ' + b.name })))));
   const next = [];
   for (const it of run.items) {
     if (it.block || it.mode === 'amrap' || !s.items.some(x => x.exId === it.exId)) continue;
