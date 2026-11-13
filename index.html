@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>홈트 시간표</title>
+<title>HOME-T</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;600;800&display=swap">
@@ -44,6 +44,8 @@ input,select{font:inherit;color:inherit}
 header.top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px}
 .brand{font-weight:800;font-size:19px;letter-spacing:-.02em}
 .brand span{color:var(--accent)}
+.brand{letter-spacing:.01em;display:flex;align-items:baseline;gap:0}
+.brand small{font-size:12px;font-weight:600;color:var(--muted);margin-left:10px;letter-spacing:0}
 .iconbtn{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center}
 .iconbtn svg{width:20px;height:20px;stroke:var(--ink);fill:none;stroke-width:1.8}
 h2{font-size:22px;letter-spacing:-.02em;margin:4px 0 2px}
@@ -231,8 +233,8 @@ textarea,.field{width:100%;border:1px solid var(--line);background:var(--surface
 <meta name="theme-color" content="#f6f5f1" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#16181a" media="(prefers-color-scheme: dark)">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="홈트 시간표">
-<meta property="og:title" content="홈트 시간표">
+<meta property="og:site_name" content="HOME-T">
+<meta property="og:title" content="HOME-T · 오늘도 한 개 더">
 <meta property="og:description" content="집에서 하는 근력운동, 요일별 시간표와 타이머로.">
 <meta property="og:url" content="https://nhs1816.github.io/homet/">
 <meta property="og:image" content="https://nhs1816.github.io/homet/icons/icon-512.png">
@@ -241,7 +243,7 @@ textarea,.field{width:100%;border:1px solid var(--line);background:var(--surface
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="홈트 시간표">
+<meta name="apple-mobile-web-app-title" content="HOME-T">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <style>
 html{-webkit-text-size-adjust:100%}
@@ -256,7 +258,7 @@ html{-webkit-text-size-adjust:100%}
 <body>
 <div class="app">
   <header class="top">
-    <div class="brand">홈트 <span>시간표</span></div>
+    <div class="brand" aria-label="HOME-T 홈트">HOME<span>-T</span><small>오늘도 한 개 더</small></div>
     <button class="iconbtn" id="gear" aria-label="설정"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
   </header>
   <div class="install" id="install" hidden><p id="installText">홈 화면에 설치하면 앱처럼 바로 열 수 있어요.</p>
@@ -273,10 +275,10 @@ html{-webkit-text-size-adjust:100%}
   <button data-go="log"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>기록</button>
 </div></nav>
 
-<script src="logic.js?v=202611131000"></script>
-<script src="figure.js?v=202611131000"></script>
-<script src="exercises.js?v=202611131000"></script>
-<script src="planner.js?v=202611131000"></script>
+<script src="logic.js?v=202611131011"></script>
+<script src="figure.js?v=202611131011"></script>
+<script src="exercises.js?v=202611131011"></script>
+<script src="planner.js?v=202611131011"></script>
 <script>
 (function () {
 'use strict';
