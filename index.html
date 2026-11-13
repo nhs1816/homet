@@ -136,6 +136,26 @@ section[data-tab]{display:none} section[data-tab].on{display:block}
 .lvl{letter-spacing:1px}
 
 /* 기록 */
+.chart{width:100%;height:auto;display:block;overflow:visible}
+.chart .grid{stroke:var(--line);stroke-width:1}
+.chart .tick{fill:var(--muted);font-size:10px;font-family:var(--f)}
+.chart .bar{fill:var(--fig-back)}
+.chart .bar.met{fill:var(--accent)}
+.chart .goal{stroke:var(--ink);stroke-width:1.5;stroke-dasharray:4 4;opacity:.6}
+.chart .goal-t{fill:var(--ink)}
+.chart .line{fill:none;stroke:var(--accent);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.chart .pt{fill:var(--accent);stroke:var(--surface);stroke-width:2}
+.chart .pt.best{fill:var(--ink)}
+.chart .best-t{fill:var(--ink);font-weight:700}
+.chart .hit{fill:transparent;cursor:pointer;outline:none}
+.chart .hit:focus-visible{stroke:var(--accent);stroke-width:1.5}
+.readout{min-height:20px;font-size:13px;font-weight:600;text-align:center;margin:6px 0 2px;font-variant-numeric:tabular-nums}
+.chart-host{margin:0 -4px}
+.tbl{margin-top:8px}
+.tbl .ex-line{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
+.tbl .ex-line:last-child{border-bottom:none}
+.tbl .ex-line .grow{text-align:left}
+.xbtn{border:none;background:none;color:var(--muted);width:30px;height:30px}
 .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
 .cal .w{font-size:12px;color:var(--faint);padding:4px 0}
@@ -253,10 +273,10 @@ html{-webkit-text-size-adjust:100%}
   <button data-go="log"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>기록</button>
 </div></nav>
 
-<script src="logic.js?v=202611130952"></script>
-<script src="figure.js?v=202611130952"></script>
-<script src="exercises.js?v=202611130952"></script>
-<script src="planner.js?v=202611130952"></script>
+<script src="logic.js?v=202611131000"></script>
+<script src="figure.js?v=202611131000"></script>
+<script src="exercises.js?v=202611131000"></script>
+<script src="planner.js?v=202611131000"></script>
 <script>
 (function () {
 'use strict';
@@ -696,10 +716,169 @@ function doDeleteCustom(c) {
 }
 
 /* ================= 기록 ================= */
+/* ================= 진행 그래프 ================= */
+const SVGNS = 'http://www.w3.org/2000/svg';
+function sv(tag, attrs, parent) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+const md = d => { const [, mm, dd] = d.split('-').map(Number); return mm + '/' + dd; };
+const CW = 320, CH = 170, PADL = 30, PADR = 12, PADT = 22, PADB = 22;
+function niceMax(v) { if (v <= 5) return 5; const p = Math.pow(10, Math.floor(Math.log10(v))); const n = v / p; return (n <= 2 ? 2 : n <= 5 ? 5 : 10) * p; }
+
+function weekChart(host, readout) {
+  const goal = S.settings.weeklyGoal;
+  const data = Logic.weeklySeries(S.sessions, todayYmd(), 8);
+  const ymax = Math.max(7, goal);
+  const svg = sv('svg', { viewBox: '0 0 ' + CW + ' ' + CH, class: 'chart', role: 'img', 'aria-label': '최근 8주 주별 운동한 날' });
+  const plotW = CW - PADL - PADR, plotH = CH - PADT - PADB;
+  const y = v => PADT + plotH - v / ymax * plotH;
+  for (const t of [0, Math.ceil(ymax / 2), ymax]) {
+    sv('line', { x1: PADL, x2: CW - PADR, y1: y(t), y2: y(t), class: 'grid' }, svg);
+    const tl = sv('text', { x: PADL - 6, y: y(t) + 4, class: 'tick', 'text-anchor': 'end' }, svg); tl.textContent = t;
+  }
+  const bw = plotW / data.length, gap = 6;
+  data.forEach((d, i) => {
+    const x = PADL + i * bw + gap / 2, w = bw - gap, top = y(d.days), hgt = Math.max(0, y(0) - top);
+    const met = d.days >= goal;
+    if (hgt > 0) {
+      const r = Math.min(4, w / 2, hgt);
+      sv('path', { d: 'M' + x + ',' + y(0) + 'V' + (top + r) + 'Q' + x + ',' + top + ' ' + (x + r) + ',' + top + 'H' + (x + w - r) + 'Q' + (x + w) + ',' + top + ' ' + (x + w) + ',' + (top + r) + 'V' + y(0) + 'Z', class: met ? 'bar met' : 'bar' }, svg);
+    }
+    const label = (i === data.length - 1 ? '이번 주' : md(d.start) + ' 주') + ': ' + d.days + '일 운동 · ' + d.sets + '세트';
+    const hit = sv('rect', { x: PADL + i * bw, y: PADT, width: bw, height: plotH, class: 'hit', tabindex: 0, 'aria-label': label }, svg);
+    const show = () => { readout.textContent = label; };
+    hit.addEventListener('click', show); hit.addEventListener('mouseenter', show); hit.addEventListener('focus', show);
+    if (i === 0 || i === data.length - 1 || i === 3) {
+      const t = sv('text', { x: PADL + i * bw + bw / 2, y: CH - 6, class: 'tick', 'text-anchor': 'middle' }, svg);
+      t.textContent = i === data.length - 1 ? '이번 주' : md(d.start);
+    }
+  });
+  sv('line', { x1: PADL, x2: CW - PADR, y1: y(goal), y2: y(goal), class: 'goal' }, svg);
+  const gl = sv('text', { x: CW - PADR, y: y(goal) - 5, class: 'tick goal-t', 'text-anchor': 'end' }, svg); gl.textContent = '목표 ' + goal + '일';
+  host.append(svg);
+  const last = data[data.length - 1];
+  readout.textContent = '이번 주: ' + last.days + '일 운동 · ' + last.sets + '세트';
+}
+
+function lineChart(host, readout, series, unit, title, latest) {
+  if (!series.length) { host.append(h('div', { class: 'empty', text: '아직 기록이 없어요.' })); readout.textContent = ''; return; }
+  const svg = sv('svg', { viewBox: '0 0 ' + CW + ' ' + CH, class: 'chart', role: 'img', 'aria-label': title });
+  const plotW = CW - PADL - PADR, plotH = CH - PADT - PADB;
+  const vals = series.map(d => d.value);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  const pad = Math.max((hi - lo) * 0.2, hi * 0.05, 1);
+  lo = Math.max(0, Math.floor(lo - pad)); hi = Math.ceil(hi + pad);
+  const t0 = Logic.parse(series[0].date).getTime(), t1 = Logic.parse(series[series.length - 1].date).getTime();
+  const x = d => series.length === 1 ? PADL + plotW / 2 : PADL + (Logic.parse(d.date).getTime() - t0) / (t1 - t0) * plotW;
+  const y = v => PADT + plotH - (v - lo) / (hi - lo) * plotH;
+  const fmtV = v => (Math.round(v * 10) / 10) + unit;
+  const mid = hi - lo >= 4 ? Math.round((lo + hi) / 2) : Math.round((lo + hi) * 5) / 10;
+  for (const t of [lo, mid, hi]) {
+    sv('line', { x1: PADL, x2: CW - PADR, y1: y(t), y2: y(t), class: 'grid' }, svg);
+    const tl = sv('text', { x: PADL - 6, y: y(t) + 4, class: 'tick', 'text-anchor': 'end' }, svg); tl.textContent = Math.round(t * 10) / 10;
+  }
+  if (series.length > 1) sv('polyline', { points: series.map(d => x(d).toFixed(1) + ',' + y(d.value).toFixed(1)).join(' '), class: 'line' }, svg);
+  const best = latest ? series[series.length - 1] : series.reduce((a, d) => (d.value >= a.value ? d : a), series[0]);
+  const word = latest ? '지금 ' : '최고 ';
+  const lab = d => md(d.date) + ' · ' + fmtV(d.value) + (d.kg ? ' (' + d.kg + 'kg)' : '');
+  series.forEach(d => {
+    const isBest = d === best;
+    sv('circle', { cx: x(d), cy: y(d.value), r: isBest ? 5.5 : 4, class: isBest ? 'pt best' : 'pt' }, svg);
+    const hit = sv('circle', { cx: x(d), cy: y(d.value), r: 14, class: 'hit', tabindex: 0, 'aria-label': lab(d) }, svg);
+    const show = () => { readout.textContent = lab(d); };
+    hit.addEventListener('click', show); hit.addEventListener('mouseenter', show); hit.addEventListener('focus', show);
+  });
+  const bl = sv('text', { x: Math.min(Math.max(x(best), PADL + 30), CW - PADR - 30), y: y(best.value) - 10, class: 'tick best-t', 'text-anchor': 'middle' }, svg);
+  bl.textContent = word + fmtV(best.value);
+  const a = sv('text', { x: PADL, y: CH - 6, class: 'tick', 'text-anchor': 'start' }, svg); a.textContent = md(series[0].date);
+  if (series.length > 1) { const z = sv('text', { x: CW - PADR, y: CH - 6, class: 'tick', 'text-anchor': 'end' }, svg); z.textContent = md(series[series.length - 1].date); }
+  host.append(svg);
+  readout.textContent = word + fmtV(best.value) + ' (' + md(best.date) + ')' + (series.length === 1 ? ' · 두 번 이상 기록하면 선으로 이어져요' : '');
+}
+
+let graphView = 'week', graphEx = '', bodyKey = 'weight';
+const BODY = { weight: ['체중', 'kg'], muscle: ['골격근량', 'kg'], fat: ['체지방률', '%'] };
+function renderGraphs(root) {
+  const card = h('div', { class: 'card', style: 'margin-bottom:14px' });
+  const seg = h('div', { class: 'seg', role: 'tablist', 'aria-label': '그래프 보기' });
+  [['week', '주간'], ['ex', '운동별'], ['body', '몸 기록']].forEach(([v, t]) => seg.append(h('button', { class: graphView === v ? 'on' : '', role: 'tab', 'aria-selected': String(graphView === v), onclick: () => { graphView = v; renderLog(); }, text: t })));
+  card.append(seg);
+  const readout = h('div', { class: 'readout', 'aria-live': 'polite' });
+  const host = h('div', { class: 'chart-host' });
+  if (graphView === 'week') {
+    card.append(readout, host);
+    weekChart(host, readout);
+    const month = todayYmd().slice(0, 7);
+    const ms = S.sessions.filter(x => x.date.startsWith(month));
+    card.append(h('div', { class: 'stats' },
+      h('div', { class: 'stat' }, h('span', { class: 'small muted', text: '이번 달 운동' }), h('b', { text: new Set(ms.map(x => x.date)).size + '일' })),
+      h('div', { class: 'stat' }, h('span', { class: 'small muted', text: '이번 달 세트' }), h('b', { text: ms.reduce((a, x) => a + x.items.reduce((b, y) => b + y.sets.length, 0), 0) + '세트' })),
+      h('div', { class: 'stat' }, h('span', { class: 'small muted', text: '연속 달성' }), h('b', { text: Logic.streakWeeks(S.sessions, S.settings.weeklyGoal, todayYmd()) + '주' }))));
+  } else if (graphView === 'ex') {
+    const list = Logic.exerciseList(S.sessions);
+    if (!list.length) { card.append(h('div', { class: 'empty', text: '운동을 기록하면 운동별 그래프가 생겨요.' })); root.append(card); return; }
+    if (!list.some(e => e.exId + '|' + e.mode === graphEx)) graphEx = list[0].exId + '|' + list[0].mode;
+    const sel = h('select', { class: 'field', 'aria-label': '운동 고르기' }, list.map(e => {
+      const o = h('option', { value: e.exId + '|' + e.mode, text: e.name + (e.mode === 'amrap' ? ' (시간 안에 최대한)' : '') + ' · ' + e.count + '회 기록' });
+      if (e.exId + '|' + e.mode === graphEx) o.selected = true;
+      return o;
+    }));
+    sel.addEventListener('change', () => { graphEx = sel.value; renderLog(); });
+    const [exId, mode] = graphEx.split('|');
+    const ex = lookup(exId);
+    const unit = mode !== 'amrap' && ex && ex.type === 'time' ? '초' : '회';
+    const series = Logic.exerciseSeries(S.sessions, exId, mode);
+    card.append(sel, h('div', { class: 'small muted', text: mode === 'amrap' ? '날짜별 한 세트 최고 개수' : unit === '초' ? '날짜별 최고 버틴 시간' : '날짜별 한 세트 최고 횟수' }), readout, host);
+    lineChart(host, readout, series, unit, (ex ? ex.name : exId) + ' 기록 그래프');
+    card.append(h('div', { class: 'tbl' }, series.slice(-5).reverse().map(d => h('div', { class: 'ex-line' }, h('span', { class: 'muted', text: md(d.date) }), h('span', { text: d.value + unit + (d.kg ? ' · ' + d.kg + 'kg' : '') })))));
+  } else {
+    const chips = h('div', { class: 'qchips', role: 'group', 'aria-label': '몸 기록 항목', style: 'margin:8px 0' });
+    Object.entries(BODY).forEach(([k, [t]]) => chips.append(h('button', { class: 'chip' + (bodyKey === k ? ' on' : ''), 'aria-pressed': String(bodyKey === k), onclick: () => { bodyKey = k; renderLog(); }, text: t })));
+    const [name, unit] = BODY[bodyKey];
+    const series = Logic.bodySeries(S.body, bodyKey);
+    card.append(chips, readout, host);
+    lineChart(host, readout, series, unit, name + ' 그래프', true);
+    if (series.length > 1) {
+      const diff = Math.round((series[series.length - 1].value - series[0].value) * 10) / 10;
+      card.append(h('div', { class: 'small', style: 'text-align:center;margin-top:4px', text: '처음(' + md(series[0].date) + ')보다 ' + (diff > 0 ? '+' : diff < 0 ? '−' : '±') + Math.abs(diff) + unit }));
+    }
+    card.append(h('button', { class: 'btn ghost', style: 'width:100%;margin-top:10px', onclick: openBodyForm, text: '+ 몸 기록 입력' }));
+    const recent = S.body.slice(-5).reverse();
+    if (recent.length) card.append(h('div', { class: 'tbl' }, recent.map(b => h('div', { class: 'ex-line' },
+      h('span', { class: 'muted', text: md(b.date) }),
+      h('span', { class: 'grow', text: Object.keys(BODY).filter(k => b[k] != null).map(k => BODY[k][0] + ' ' + b[k] + BODY[k][1]).join(' · ') }),
+      h('button', { class: 'xbtn', 'aria-label': md(b.date) + ' 몸 기록 지우기', onclick: () => ask('몸 기록 지우기', md(b.date) + ' 기록을 지울까요?', '지우기', () => { S.body = S.body.filter(x => x.date !== b.date); save(); renderLog(); }, true), text: '✕' })))));
+  }
+  root.append(card);
+}
+function openBodyForm() {
+  openSheet('몸 기록 입력', body => {
+    const today = todayYmd();
+    const old = S.body.find(x => x.date === today) || {};
+    const date = h('input', { type: 'date', class: 'field', value: today, max: today, 'aria-label': '날짜' });
+    const num = (k, label, ph) => { const i = h('input', { type: 'number', inputmode: 'decimal', step: '0.1', min: '0', class: 'field', placeholder: ph, value: old[k] == null ? '' : old[k], 'aria-label': label }); return [h('label', { class: 'small muted', text: label }), i]; };
+    const [l1, w] = num('weight', '체중(kg)', '예: 61.5');
+    const [l2, mu] = num('muscle', '골격근량(kg, 선택)', '인바디 결과');
+    const [l3, ft] = num('fat', '체지방률(%, 선택)', '인바디 결과');
+    body.append(h('label', { class: 'small muted', text: '날짜' }), date, l1, w, l2, mu, l3, ft);
+    body.append(h('button', { class: 'btn primary big', onclick: () => {
+      const e = { date: date.value || today };
+      const put = (k, el) => { const v = parseFloat(el.value); if (isFinite(v) && v > 0) e[k] = Math.round(v * 10) / 10; };
+      put('weight', w); put('muscle', mu); put('fat', ft);
+      if (Object.keys(e).length < 2) { toast('값을 하나 이상 넣어 주세요.'); return; }
+      S.body = Logic.upsertBody(S.body, e); save(); closeSheet(); toast('몸 기록을 저장했어요.'); graphView = 'body'; renderLog();
+    }, text: '저장' }));
+  });
+}
+
 let calMonth = todayYmd().slice(0, 7), calSel = todayYmd();
 function renderLog() {
   const root = clear($('#log'));
   root.append(h('h2', { text: '기록' }));
+  renderGraphs(root);
   const [y, m] = calMonth.split('-').map(Number);
   const dates = new Set(S.sessions.map(s => s.date));
   const monthCount = new Set(S.sessions.filter(s => s.date.startsWith(calMonth)).map(s => s.date)).size;

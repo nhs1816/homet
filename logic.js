@@ -14,6 +14,7 @@
       favorites: [],
       custom: [],
       sessions: [],
+      body: [],
       activeRun: null,
     };
   }
@@ -23,6 +24,13 @@
   const DATE = /^\d{4}-\d{2}-\d{2}$/;
   function okItem(x) { return isObj(x) && typeof x.exId === 'string' && typeof x.name === 'string' && isNum(x.sets) && x.sets > 0 && isNum(x.rest) && x.rest >= 0; }
   function okSession(x) { return isObj(x) && typeof x.date === 'string' && DATE.test(x.date) && isNum(x.start) && isNum(x.end) && Array.isArray(x.items) && x.items.every(i => isObj(i) && typeof i.exId === 'string' && Array.isArray(i.sets)); }
+  const BODY_KEYS = ['weight', 'muscle', 'fat'];
+  function cleanBody(x) {
+    if (!isObj(x) || typeof x.date !== 'string' || !DATE.test(x.date)) return null;
+    const o = { date: x.date };
+    for (const k of BODY_KEYS) if (isNum(x[k]) && x[k] > 0) o[k] = x[k];
+    return Object.keys(o).length > 1 ? o : null;
+  }
   function okSettings(x) { return isObj(x) && (x.weeklyGoal == null || (Number.isInteger(x.weeklyGoal) && x.weeklyGoal >= 1 && x.weeklyGoal <= 7)) && (x.restSec == null || (isNum(x.restSec) && x.restSec >= 0)); }
 
   function loadState(raw) {
@@ -48,6 +56,7 @@
     if (Array.isArray(o.favorites)) s.favorites = o.favorites.filter(x => typeof x === 'string');
     if (Array.isArray(o.custom)) s.custom = o.custom.filter(x => isObj(x) && typeof x.id === 'string' && typeof x.name === 'string');
     if (Array.isArray(o.sessions)) s.sessions = o.sessions.filter(okSession);
+    if (Array.isArray(o.body)) s.body = o.body.map(cleanBody).filter(Boolean);
     if (isObj(o.activeRun)) s.activeRun = o.activeRun;
     return s;
   }
@@ -216,6 +225,53 @@
     return res;
   }
 
+  /* ---------- 진행 그래프 계산 ---------- */
+  function weeklySeries(sessions, today, n) {
+    const ws = weekStart(today), out = [];
+    for (let k = n - 1; k >= 0; k--) {
+      const start = addDays(ws, -7 * k), end = addDays(start, 6);
+      let sets = 0;
+      for (const s of sessions) if (s.date >= start && s.date <= end) for (const x of s.items || []) sets += (x.sets || []).length;
+      out.push({ start, days: weekCount(sessions, start), sets });
+    }
+    return out;
+  }
+  const isAmrap = x => x.mode === 'amrap';
+  function exerciseSeries(sessions, exId, mode) {
+    const byDate = {};
+    for (const s of sessions) for (const x of s.items || []) {
+      if (x.exId !== exId || isAmrap(x) !== (mode === 'amrap')) continue;
+      for (const st of x.sets || []) {
+        const v = st.sec != null ? st.sec : st.reps;
+        if (!isNum(v)) continue;
+        const d = byDate[s.date] || (byDate[s.date] = { date: s.date, value: 0, kg: null });
+        d.value = Math.max(d.value, v);
+        if (isNum(st.kg)) d.kg = Math.max(d.kg || 0, st.kg);
+      }
+    }
+    return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
+  }
+  function exerciseList(sessions) {
+    const m = {};
+    for (const s of sessions) for (const x of s.items || []) {
+      const mode = isAmrap(x) ? 'amrap' : 'reps', k = x.exId + '|' + mode;
+      const e = m[k] || (m[k] = { exId: x.exId, name: x.name || x.exId, mode, count: 0, last: '' });
+      e.count++; if (s.date > e.last) e.last = s.date;
+    }
+    return Object.values(m).sort((a, b) => b.count - a.count || b.last.localeCompare(a.last));
+  }
+  function upsertBody(body, entry) {
+    const e = cleanBody(entry);
+    if (!e) return body.slice();
+    const out = body.filter(x => x.date !== e.date);
+    const old = body.find(x => x.date === e.date);
+    out.push(old ? Object.assign({}, old, e) : e);
+    return out.sort((a, b) => a.date.localeCompare(b.date));
+  }
+  function bodySeries(body, key) {
+    return (body || []).filter(x => isNum(x[key])).map(x => ({ date: x.date, value: x[key] })).sort((a, b) => a.date.localeCompare(b.date));
+  }
+
   /* ---------- 음성 안내 타이밍: 남은 초(left)에 할 말, 이미 한 말(said)은 건너뜀 ---------- */
   function cue(kind, total, left, said) {
     let c = null;
@@ -243,6 +299,7 @@
     if (!Array.isArray(o.sessions)) return { ok: false, error: '운동 기록이 빠져 있어요.' };
     if (!o.sessions.every(okSession)) return { ok: false, error: '운동 기록 중 읽을 수 없는 것이 있어요.' };
     if (o.settings != null && !okSettings(o.settings)) return { ok: false, error: '설정 값이 올바르지 않아요.' };
+    if (o.body != null && !Array.isArray(o.body)) return { ok: false, error: '몸 기록 형식이 올바르지 않아요.' };
     return { ok: true };
   }
 
@@ -252,5 +309,6 @@
     weekCount, streakWeeks, lastRecord,
     createRun, completeSet, addRest, restRemaining, finishRest, skipExercise, prevExercise, endRun,
     validateBackup, setFeel, suggest, targetOf, cue,
+    weeklySeries, exerciseSeries, exerciseList, upsertBody, bodySeries,
   };
 })();
