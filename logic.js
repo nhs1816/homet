@@ -9,7 +9,7 @@
     for (const d of DAYS) schedule[d] = { note: '', items: [] };
     return {
       version: 1,
-      settings: { weeklyGoal: 3, restSec: 60, sound: true, mode: 'reps', voice: true, tempo: 'normal', warmup: false },
+      settings: { weeklyGoal: 3, restSec: 60, sound: true, mode: 'reps', voice: true, tempo: 'normal', warmup: false, goalType: 'count', goalMinutes: 150, goalKcal: 1500 },
       schedule,
       favorites: [],
       custom: [],
@@ -20,6 +20,7 @@
       routines: [],
       activeRoutine: '',
       backup: { at: 0, snooze: 0 },
+      profile: null,
     };
   }
 
@@ -52,6 +53,9 @@
       if (typeof st.voice === 'boolean') s.settings.voice = st.voice;
       if (st.tempo === 'slow' || st.tempo === 'normal' || st.tempo === 'fast') s.settings.tempo = st.tempo;
       if (typeof st.warmup === 'boolean') s.settings.warmup = st.warmup;
+      if (['count', 'minutes', 'kcal'].includes(st.goalType)) s.settings.goalType = st.goalType;
+      if (Number.isInteger(st.goalMinutes) && st.goalMinutes >= 30 && st.goalMinutes <= 2000) s.settings.goalMinutes = st.goalMinutes;
+      if (Number.isInteger(st.goalKcal) && st.goalKcal >= 100 && st.goalKcal <= 20000) s.settings.goalKcal = st.goalKcal;
     }
     if (isObj(o.schedule)) {
       for (const d of DAYS) {
@@ -68,6 +72,7 @@
     if (Array.isArray(o.routines)) s.routines = o.routines.filter(r => isObj(r) && typeof r.id === 'string' && typeof r.name === 'string' && isObj(r.schedule) && DAYS.every(d => isObj(r.schedule[d]) && Array.isArray(r.schedule[d].items)))
       .map(r => ({ id: r.id, name: r.name, schedule: Object.fromEntries(DAYS.map(d => [d, { note: typeof r.schedule[d].note === 'string' ? r.schedule[d].note : '', items: r.schedule[d].items.filter(okItem) }])) }));
     if (typeof o.activeRoutine === 'string') s.activeRoutine = o.activeRoutine;
+    if (isObj(o.profile)) s.profile = cleanProfile(o.profile);
     if (isObj(o.backup)) s.backup = { at: isNum(o.backup.at) ? o.backup.at : 0, snooze: isNum(o.backup.snooze) ? o.backup.snooze : 0 };
     return s;
   }
@@ -343,6 +348,7 @@
       if (n === 1) got.first = s.date;
       for (const c of [10, 30, 50, 100]) if (n === c) got['count' + c] = s.date;
       for (const x of s.items || []) for (const st of x.sets || []) {
+        if (x.cardio || CARDIO_IDS.has(x.exId)) continue;
         if (!got.reps20 && x.mode !== 'amrap' && (st.reps || 0) >= 20) got.reps20 = s.date;
         if (!got.plank60 && (st.sec || 0) >= 60) got.plank60 = s.date;
       }
@@ -371,12 +377,12 @@
     const prev = (m === 1 ? (y - 1) + '-12' : y + '-' + String(m - 1).padStart(2, '0'));
     const stat = key => {
       const ss = sessions.filter(s => s.date.startsWith(key));
-      return { days: new Set(ss.map(s => s.date)).size, sets: ss.reduce((a, s) => a + (s.items || []).reduce((b, x) => b + (x.sets || []).length, 0), 0), ss };
+      return { days: new Set(ss.map(s => s.date)).size, sets: ss.reduce((a, s) => a + (s.items || []).reduce((b, x) => b + (x.cardio || CARDIO_IDS.has(x.exId) ? 0 : (x.sets || []).length), 0), 0), ss };
     };
     const cur = stat(ym), pv = stat(prev);
     let top = null;
     const ids = new Set();
-    for (const s of cur.ss) for (const x of s.items || []) if (x.mode !== 'amrap') ids.add(x.exId);
+    for (const s of cur.ss) for (const x of s.items || []) if (x.mode !== 'amrap' && !x.cardio && !CARDIO_IDS.has(x.exId)) ids.add(x.exId);
     for (const id of ids) {
       const ser = exerciseSeries(cur.ss, id, 'reps');
       if (ser.length < 2) continue;
@@ -442,13 +448,172 @@
     return now - from >= 30 * 86400000;
   }
 
+  /* ---------- 프로필 ---------- */
+  function age(birthYear, today) { return Number(today.slice(0, 4)) - birthYear; }
+  function validProfile(p, today) {
+    const e = {};
+    const yr = Number(today.slice(0, 4));
+    const inR = (v, a, b) => isNum(v) && v >= a && v <= b;
+    if (!p || typeof p.nickname !== 'string' || !p.nickname.trim() || p.nickname.trim().length > 20) e.nickname = '닉네임을 1~20자로 적어 주세요.';
+    if (!p || (p.sex !== 'm' && p.sex !== 'f')) e.sex = '성별을 골라 주세요.';
+    if (!p || !Number.isInteger(p.birthYear) || p.birthYear < 1930 || p.birthYear > yr - 14) e.birthYear = '만 14세 이상만 쓸 수 있어요. 출생연도를 확인해 주세요.';
+    if (!p || !inR(p.height, 100, 230)) e.height = '키를 100~230cm로 적어 주세요.';
+    if (!p || !inR(p.weight, 25, 250)) e.weight = '몸무게를 25~250kg으로 적어 주세요.';
+    if (p && p.muscle != null && !inR(p.muscle, 5, 80)) e.muscle = '골격근량은 5~80kg이에요.';
+    if (p && p.fat != null && !inR(p.fat, 2, 70)) e.fat = '체지방률은 2~70%예요.';
+    return { ok: !Object.keys(e).length, errors: e };
+  }
+  function cleanProfile(p) {
+    const o = { nickname: typeof p.nickname === 'string' ? p.nickname.trim() : '', sex: p.sex, birthYear: p.birthYear, height: p.height, weight: p.weight,
+      muscle: isNum(p.muscle) ? p.muscle : null, fat: isNum(p.fat) ? p.fat : null };
+    if (!validProfile(o, ymd(new Date())).ok) return null;
+    o.anonId = typeof p.anonId === 'string' ? p.anonId : '';
+    o.consent = p.consent === true;
+    o.invite = typeof p.invite === 'string' ? p.invite : '';
+    return o;
+  }
+  function bmr(p, today) {
+    return 10 * p.weight + 6.25 * p.height - 5 * age(p.birthYear, today) + (p.sex === 'm' ? 5 : -161);
+  }
+
+  /* ---------- 유산소 ---------- */
+  const CARDIO = [
+    { id: 'treadmill', name: '러닝머신' }, { id: 'outdoor-run', name: '실외 러닝' }, { id: 'walk', name: '걷기' },
+    { id: 'futsal', name: '풋살' }, { id: 'cycle', name: '자전거' }, { id: 'other', name: '기타 활동' },
+  ];
+  const CARDIO_IDS = new Set(CARDIO.map(c => c.id));
+  const interp = (tbl, x) => {
+    if (x <= tbl[0][0]) return tbl[0][1];
+    for (let i = 1; i < tbl.length; i++) if (x <= tbl[i][0]) { const [x0, y0] = tbl[i - 1], [x1, y1] = tbl[i]; return y0 + (y1 - y0) * (x - x0) / (x1 - x0); }
+    return tbl[tbl.length - 1][1];
+  };
+  const WALK_MET = [[3.2, 2.8], [4, 3.0], [5, 3.5], [6, 4.3], [6.5, 5.0]];
+  const RUN_MET = [[6.4, 6.0], [8, 8.3], [9.7, 9.8], [11.3, 11.0], [12.9, 11.8], [14.5, 12.8]];
+  function cardioMinutes(item) { return ((item.sets || []).reduce((a, st) => a + (st.sec || 0), 0)) / 60; }
+  function metFor(item) {
+    if (!item.cardio && !CARDIO_IDS.has(item.exId)) return 5;
+    const c = item.cardio || {};
+    const min = cardioMinutes(item);
+    const speed = isNum(c.speed) ? c.speed : (isNum(c.km) && min > 0 ? c.km / (min / 60) : null);
+    switch (item.exId) {
+      case 'treadmill': case 'outdoor-run': {
+        let m = speed == null ? 8.3 : (speed < 6.5 ? interp(WALK_MET, speed) : interp(RUN_MET, speed));
+        if (item.exId === 'treadmill' && isNum(c.incline) && c.incline > 0) m += Math.min(5, c.incline * 0.5);
+        return Math.round(m * 100) / 100;
+      }
+      case 'walk': return speed == null ? 3.5 : Math.round(interp(WALK_MET, speed) * 100) / 100;
+      case 'futsal': return 7;
+      case 'cycle': return 6.8;
+      default: return 4;
+    }
+  }
+  function cardioSession(kind, o) {
+    const c = CARDIO.find(x => x.id === kind) || CARDIO[CARDIO.length - 1];
+    const cardio = {};
+    for (const k of ['km', 'speed', 'incline']) if (isNum(o[k]) && o[k] > 0) cardio[k] = o[k];
+    const start = isNum(o.start) ? o.start : Date.now();
+    return { id: 'c' + start, date: o.date, start, end: start + o.min * 60000, items: [{ exId: c.id, name: o.name || c.name, sets: [{ sec: Math.round(o.min * 60) }], cardio }] };
+  }
+  function intervalPlan(o) {
+    const out = [];
+    if (o.warm > 0) out.push({ kind: 'warm', sec: o.warm * 60 });
+    for (let i = 0; i < o.rounds; i++) {
+      out.push({ kind: 'run', sec: o.run * 60 });
+      if (i < o.rounds - 1 && o.walk > 0) out.push({ kind: 'walk', sec: o.walk * 60 });
+    }
+    if (o.cool > 0) out.push({ kind: 'cool', sec: o.cool * 60 });
+    return out;
+  }
+  function haversine(a, b) {
+    const R = 6371, rad = d => d * Math.PI / 180;
+    const dLat = rad(b[0] - a[0]), dLng = rad(b[1] - a[1]);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a[0])) * Math.cos(rad(b[0])) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+  function trackDistance(points) {
+    let total = 0, prev = null, rejected = 0;
+    for (const p of points || []) {
+      if (!p || !isNum(p.lat) || !isNum(p.lng) || !isNum(p.t) || (isNum(p.acc) && p.acc > 30)) continue;
+      if (!prev) { prev = p; continue; }
+      const d = haversine([prev.lat, prev.lng], [p.lat, p.lng]);
+      const hrs = Math.max(1, p.t - prev.t) / 3600000;
+      if (d / hrs > 25) { if (++rejected >= 3) { prev = p; rejected = 0; } continue; } // 순간 이동 같은 튀는 점 (3번 연속이면 기준점이 틀렸던 것)
+      rejected = 0;
+      const noise = Math.max(5, ((prev.acc || 10) + (p.acc || 10)) / 2) / 1000;
+      if (d < noise) continue; // 서 있을 때 흔들림
+      total += d; prev = p;
+    }
+    return Math.round(total * 1000) / 1000;
+  }
+
+  /* ---------- 시간·칼로리·목표 ---------- */
+  const MAX_STRENGTH_MIN = 180; // 이어하기로 날이 바뀌어도 부풀지 않게
+  function sessionMinutes(s) {
+    let cardio = 0, hasStrength = false;
+    for (const x of s.items || []) { if (x.cardio || CARDIO_IDS.has(x.exId)) cardio += cardioMinutes(x); else hasStrength = true; }
+    const dur = Math.min(MAX_STRENGTH_MIN, Math.max(0, ((s.end || 0) - (s.start || 0)) / 60000));
+    return Math.round(hasStrength ? Math.max(dur, cardio) : cardio);
+  }
+  function sessionKcal(s, weight) {
+    if (!isNum(weight) || weight <= 0) return 0;
+    let kcal = 0, cardio = 0, hasStrength = false;
+    for (const x of s.items || []) {
+      if (x.cardio || CARDIO_IDS.has(x.exId)) { const m = cardioMinutes(x); cardio += m; kcal += metFor(x) * weight * m / 60; }
+      else hasStrength = true;
+    }
+    if (hasStrength) { const dur = Math.max(0, Math.min(MAX_STRENGTH_MIN, ((s.end || 0) - (s.start || 0)) / 60000) - cardio); kcal += 5 * weight * dur / 60; }
+    return kcal;
+  }
+  function weekStats(sessions, day, weight) {
+    const a = weekStart(day), b = addDays(a, 6);
+    const ss = sessions.filter(s => s.date >= a && s.date <= b);
+    return { days: new Set(ss.map(s => s.date)).size, minutes: ss.reduce((t, s) => t + sessionMinutes(s), 0), kcal: Math.round(ss.reduce((t, s) => t + sessionKcal(s, weight), 0)) };
+  }
+  function goalProgress(settings, stats) {
+    const t = settings.goalType || 'count';
+    if (t === 'minutes') return { value: stats.minutes, goal: settings.goalMinutes, unit: '분', met: stats.minutes >= settings.goalMinutes };
+    if (t === 'kcal') return { value: stats.kcal, goal: settings.goalKcal, unit: 'kcal', met: stats.kcal >= settings.goalKcal };
+    return { value: stats.days, goal: settings.weeklyGoal, unit: '회', met: stats.days >= settings.weeklyGoal };
+  }
+  function streakBy(sessions, settings, today, restWeeks, weight) {
+    const rest = new Set(restWeeks || []);
+    const met = w => goalProgress(settings, weekStats(sessions, w, weight)).met;
+    let n = 0, w = addDays(weekStart(today), -7);
+    for (let guard = 0; guard < 600; guard++) {
+      if (met(w)) n++; else if (!rest.has(w)) break;
+      w = addDays(w, -7);
+    }
+    if (met(weekStart(today))) n++;
+    return n;
+  }
+
+  /* ---------- 정보 보내기 (동의한 경우, 익명·요약만) ---------- */
+  function payload(st, today) {
+    const p = st.profile || {};
+    const w = p.weight;
+    const from = addDays(today, -27);
+    const recent = st.sessions.filter(s => s.date >= from && s.date <= today);
+    const s = st.settings;
+    const goalValue = s.goalType === 'minutes' ? s.goalMinutes : s.goalType === 'kcal' ? s.goalKcal : s.weeklyGoal;
+    return {
+      id: p.anonId, nickname: p.nickname, sex: p.sex, age: age(p.birthYear, today), height: p.height, weight: w,
+      muscle: p.muscle == null ? null : p.muscle, fat: p.fat == null ? null : p.fat,
+      goalType: s.goalType || 'count', goalValue,
+      total: st.sessions.length, lastDate: st.sessions.map(x => x.date).sort().pop() || '',
+      w4Days: new Set(recent.map(x => x.date)).size,
+      w4Minutes: recent.reduce((t, x) => t + sessionMinutes(x), 0),
+      w4Kcal: Math.round(recent.reduce((t, x) => t + sessionKcal(x, w), 0)),
+      updated: today,
+    };
+  }
+
   /* ---------- 진행 그래프 계산 ---------- */
   function weeklySeries(sessions, today, n) {
     const ws = weekStart(today), out = [];
     for (let k = n - 1; k >= 0; k--) {
       const start = addDays(ws, -7 * k), end = addDays(start, 6);
       let sets = 0;
-      for (const s of sessions) if (s.date >= start && s.date <= end) for (const x of s.items || []) sets += (x.sets || []).length;
+      for (const s of sessions) if (s.date >= start && s.date <= end) for (const x of s.items || []) if (!x.cardio && !CARDIO_IDS.has(x.exId)) sets += (x.sets || []).length;
       out.push({ start, days: weekCount(sessions, start), sets });
     }
     return out;
@@ -471,6 +636,7 @@
   function exerciseList(sessions) {
     const m = {};
     for (const s of sessions) for (const x of s.items || []) {
+      if (x.cardio || CARDIO_IDS.has(x.exId)) continue;
       const mode = isAmrap(x) ? 'amrap' : 'reps', k = x.exId + '|' + mode;
       const e = m[k] || (m[k] = { exId: x.exId, name: x.name || x.exId, mode, count: 0, last: '' });
       e.count++; if (s.date > e.last) e.last = s.date;
@@ -529,6 +695,8 @@
     validateBackup, setFeel, suggest, targetOf, cue,
     weeklySeries, exerciseSeries, exerciseList, upsertBody, bodySeries,
     TEMPO_SEC, koCount, swapExercise, editSession, withWarmup, skipBlock, quickRoutine,
+    age, validProfile, bmr, CARDIO, metFor, cardioSession, intervalPlan, haversine, trackDistance,
+    sessionMinutes, sessionKcal, weekStats, goalProgress, streakBy, payload,
     needBackup, canRest, badges, monthReport, ensureRoutines, syncRoutine, switchRoutine, addRoutine, renameRoutine, removeRoutine,
   };
 })();

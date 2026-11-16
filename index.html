@@ -230,6 +230,15 @@ textarea,.field{width:100%;border:1px solid var(--line);background:var(--surface
 .badge .medal{color:var(--accent);font-size:18px;line-height:1}
 .note.backup{margin:10px 0 0;font-size:13px}
 .promise li{margin:3px 0}
+.onboard .run-in{gap:6px}
+.onboard .brand{font-size:18px}
+.form .field{margin:2px 0 2px}
+.err{color:#c0392b;font-size:12px;min-height:16px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.photo{margin-bottom:12px}
+.photo img{width:100%;height:auto;border-radius:10px;border:1px solid var(--line);margin-top:4px}
+.ivtag{font-size:14px;padding:5px 14px}
+.ivtag.run{background:var(--accent);color:var(--accent-ink)}
 .sugline{text-align:center;font-size:13px;color:var(--muted)}
 .sugline.up{color:var(--ok);font-weight:600}
 .feel{display:flex;flex-direction:column;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px}
@@ -285,10 +294,10 @@ html{-webkit-text-size-adjust:100%}
   <button data-go="log"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>기록</button>
 </div></nav>
 
-<script src="logic.js?v=202611131517"></script>
-<script src="figure.js?v=202611131517"></script>
-<script src="exercises.js?v=202611131517"></script>
-<script src="planner.js?v=202611131517"></script>
+<script src="logic.js?v=202611161035"></script>
+<script src="figure.js?v=202611161035"></script>
+<script src="exercises.js?v=202611161035"></script>
+<script src="planner.js?v=202611161035"></script>
 <script>
 (function () {
 'use strict';
@@ -445,6 +454,9 @@ function renderToday() {
     if (!next) card.append(h('button', { class: 'btn primary big', onclick: openPlanner, text: '맞춤 루틴 만들기' }),
       h('button', { class: 'btn ghost', style: 'width:100%;margin-top:8px', onclick: () => go('plan'), text: '직접 짜기' }));
   }
+  card.append(h('div', { class: 'actions' },
+    h('button', { class: 'btn ghost', onclick: () => openCardioForm(), text: '+ 활동 기록' }),
+    h('button', { class: 'btn ghost', onclick: openIntervalSetup, text: '러닝 타이머' })));
   if (DAYS.some(k => k !== dk && S.schedule[k].items.length)) card.append(h('button', { class: 'btn ghost', style: 'width:100%;margin-top:8px', onclick: pickOtherDay, text: '다른 요일 루틴으로 하기' }));
   root.append(card);
 
@@ -456,18 +468,19 @@ function renderToday() {
     const dd = Logic.addDays(ws, i);
     week.append(h('div', { class: 'd' }, h('div', { class: 'dot' + (dates.has(dd) ? ' done' : '') + (dd === ymd ? ' today' : ''), 'aria-label': DAY_KO[k] + (dates.has(dd) ? ' 운동함' : '') }), DAY_KO[k]));
   });
-  const cnt = Logic.weekCount(S.sessions, ymd), goal = S.settings.weeklyGoal;
+  const g = goalNow(ymd);
   const resting = S.restWeeks.includes(ws);
   const restRow = resting
     ? h('div', { class: 'note', style: 'display:flex;align-items:center;gap:8px;margin-top:10px' }, h('span', { class: 'grow', text: '이번 주는 쉬어가는 주예요. 연속 기록이 끊기지 않아요.' }),
         h('button', { class: 'linkbtn', onclick: () => { S.restWeeks = S.restWeeks.filter(x => x !== ws); save(); render(); }, text: '취소' }))
-    : (cnt < goal && Logic.canRest(S.restWeeks, ws)
+    : (!g.met && Logic.canRest(S.restWeeks, ws)
       ? h('button', { class: 'linkbtn', style: 'margin-top:10px', onclick: () => ask('이번 주 쉬어가기', '아프거나 바쁜 주라면 쉬어가는 주로 표시하세요. 목표를 못 채워도 연속 기록이 끊기지 않아요. 한 달에 한 번만 쓸 수 있어요.', '쉬어가기', () => { S.restWeeks.push(ws); save(); render(); }), text: '이번 주 쉬어가기' })
       : null);
   root.append(h('h3', { text: '이번 주' }), h('div', { class: 'card' }, week, restRow,
     h('div', { class: 'stats' },
-      h('div', { class: 'stat' }, h('span', { class: 'small muted', text: '이번 주' }), h('b', { text: cnt + ' / ' + goal + '회' })),
-      h('div', { class: 'stat' }, h('span', { class: 'small muted', text: '목표 달성 연속' }), h('b', { text: Logic.streakWeeks(S.sessions, goal, ymd, S.restWeeks) + '주' })))));
+      h('div', { class: 'stat' }, h('span', { class: 'small muted', text: '이번 주' + (g.unit === 'kcal' ? ' (추정)' : '') }), h('b', { text: goalText(g) })),
+      h('div', { class: 'stat' }, h('span', { class: 'small muted', text: '목표 달성 연속' }), h('b', { text: streakNow() + '주' }))),
+    g.unit === 'kcal' && !weightNow() ? h('div', { class: 'small muted', style: 'margin-top:8px', text: '칼로리 목표는 프로필에 몸무게를 넣어야 계산돼요.' }) : null));
 }
 function nextDay(dk) {
   const i = DAYS.indexOf(dk);
@@ -723,6 +736,12 @@ function openExercise(id) {
     }
   });
 }
+function itemText2(it) {
+  if (!it.cardio && !Logic.CARDIO.some(c => c.id === it.exId)) return setsText(it.sets);
+  const min = Math.round(it.sets.reduce((a, x) => a + (x.sec || 0), 0) / 60);
+  const c = it.cardio || {};
+  return min + '분' + (c.km ? ' · ' + c.km + 'km' : '') + (c.speed ? ' · ' + c.speed + 'km/h' : '') + (c.incline ? ' · 경사 ' + c.incline + '%' : '');
+}
 function setsText(sets) {
   const one = x => (x.sec != null ? x.sec + '초' : x.reps + '회' + (x.amrap ? '/' + secLabel(x.amrap) : ''));
   const same = sets.length > 1 && sets.every(x => one(x) === one(sets[0]) && (x.kg || 0) === (sets[0].kg || 0));
@@ -776,10 +795,11 @@ const CW = 320, CH = 170, PADL = 30, PADR = 12, PADT = 22, PADB = 22;
 function niceMax(v) { if (v <= 5) return 5; const p = Math.pow(10, Math.floor(Math.log10(v))); const n = v / p; return (n <= 2 ? 2 : n <= 5 ? 5 : 10) * p; }
 
 function weekChart(host, readout) {
-  const goal = S.settings.weeklyGoal;
-  const data = Logic.weeklySeries(S.sessions, todayYmd(), 8);
-  const ymax = Math.max(7, goal);
-  const svg = sv('svg', { viewBox: '0 0 ' + CW + ' ' + CH, class: 'chart', role: 'img', 'aria-label': '최근 8주 주별 운동한 날' });
+  const gt = S.settings.goalType || 'count', w8 = weightNow();
+  const data = Logic.weeklySeries(S.sessions, todayYmd(), 8).map(d => { const st = Logic.weekStats(S.sessions, d.start, w8); return Object.assign(d, { minutes: st.minutes, kcal: st.kcal, v: gt === 'minutes' ? st.minutes : gt === 'kcal' ? st.kcal : d.days }); });
+  const goal = goalNow().goal, gu = gt === 'minutes' ? '분' : gt === 'kcal' ? 'kcal' : '일';
+  const ymax = gt === 'count' ? Math.max(7, goal) : niceMax(Math.max(goal, ...data.map(d => d.v)) * 1.1);
+  const svg = sv('svg', { viewBox: '0 0 ' + CW + ' ' + CH, class: 'chart', role: 'img', 'aria-label': '최근 8주 주별 ' + (gt === 'minutes' ? '운동 시간' : gt === 'kcal' ? '소모 칼로리' : '운동한 날') });
   const plotW = CW - PADL - PADR, plotH = CH - PADT - PADB;
   const y = v => PADT + plotH - v / ymax * plotH;
   for (const t of [0, Math.ceil(ymax / 2), ymax]) {
@@ -788,13 +808,13 @@ function weekChart(host, readout) {
   }
   const bw = plotW / data.length, gap = 6;
   data.forEach((d, i) => {
-    const x = PADL + i * bw + gap / 2, w = bw - gap, top = y(d.days), hgt = Math.max(0, y(0) - top);
-    const met = d.days >= goal;
+    const x = PADL + i * bw + gap / 2, w = bw - gap, top = y(d.v), hgt = Math.max(0, y(0) - top);
+    const met = d.v >= goal;
     if (hgt > 0) {
       const r = Math.min(4, w / 2, hgt);
       sv('path', { d: 'M' + x + ',' + y(0) + 'V' + (top + r) + 'Q' + x + ',' + top + ' ' + (x + r) + ',' + top + 'H' + (x + w - r) + 'Q' + (x + w) + ',' + top + ' ' + (x + w) + ',' + (top + r) + 'V' + y(0) + 'Z', class: met ? 'bar met' : 'bar' }, svg);
     }
-    const label = (i === data.length - 1 ? '이번 주' : md(d.start) + ' 주') + ': ' + d.days + '일 운동 · ' + d.sets + '세트';
+    const label = (i === data.length - 1 ? '이번 주' : md(d.start) + ' 주') + ': ' + weekLabel(d);
     const hit = sv('rect', { x: PADL + i * bw, y: PADT, width: bw, height: plotH, class: 'hit', tabindex: 0, 'aria-label': label }, svg);
     const show = () => { readout.textContent = label; };
     hit.addEventListener('click', show); hit.addEventListener('mouseenter', show); hit.addEventListener('focus', show);
@@ -804,11 +824,12 @@ function weekChart(host, readout) {
     }
   });
   sv('line', { x1: PADL, x2: CW - PADR, y1: y(goal), y2: y(goal), class: 'goal' }, svg);
-  const gl = sv('text', { x: CW - PADR, y: y(goal) - 5, class: 'tick goal-t', 'text-anchor': 'end' }, svg); gl.textContent = '목표 ' + goal + '일';
+  const gl = sv('text', { x: CW - PADR, y: y(goal) - 5, class: 'tick goal-t', 'text-anchor': 'end' }, svg); gl.textContent = '목표 ' + goal.toLocaleString() + gu;
   host.append(svg);
   const last = data[data.length - 1];
-  readout.textContent = '이번 주: ' + last.days + '일 운동 · ' + last.sets + '세트';
+  readout.textContent = '이번 주: ' + weekLabel(last);
 }
+function weekLabel(d) { return d.days + '일 · ' + d.minutes + '분' + (d.kcal ? ' · 약 ' + d.kcal + 'kcal' : '') + (d.sets ? ' · ' + d.sets + '세트' : ''); }
 
 function lineChart(host, readout, series, unit, title, latest) {
   if (!series.length) { host.append(h('div', { class: 'empty', text: '아직 기록이 없어요.' })); readout.textContent = ''; return; }
@@ -882,8 +903,8 @@ function renderGraphs(root) {
     const ms = S.sessions.filter(x => x.date.startsWith(month));
     card.append(h('div', { class: 'stats' },
       h('div', { class: 'stat' }, h('span', { class: 'small muted', text: '이번 달 운동' }), h('b', { text: new Set(ms.map(x => x.date)).size + '일' })),
-      h('div', { class: 'stat' }, h('span', { class: 'small muted', text: '이번 달 세트' }), h('b', { text: ms.reduce((a, x) => a + x.items.reduce((b, y) => b + y.sets.length, 0), 0) + '세트' })),
-      h('div', { class: 'stat' }, h('span', { class: 'small muted', text: '연속 달성' }), h('b', { text: Logic.streakWeeks(S.sessions, S.settings.weeklyGoal, todayYmd(), S.restWeeks) + '주' }))));
+      h('div', { class: 'stat' }, h('span', { class: 'small muted', text: '이번 달 시간' }), h('b', { text: ms.reduce((a, x) => a + Logic.sessionMinutes(x), 0) + '분' })),
+      h('div', { class: 'stat' }, h('span', { class: 'small muted', text: '연속 달성' }), h('b', { text: streakNow() + '주' }))));
   } else if (graphView === 'ex') {
     const list = Logic.exerciseList(S.sessions);
     if (!list.length) { card.append(h('div', { class: 'empty', text: '운동을 기록하면 운동별 그래프가 생겨요.' })); root.append(card); return; }
@@ -912,7 +933,7 @@ function renderGraphs(root) {
       const diff = Math.round((series[series.length - 1].value - series[0].value) * 10) / 10;
       card.append(h('div', { class: 'small', style: 'text-align:center;margin-top:4px', text: '처음(' + md(series[0].date) + ')보다 ' + (diff > 0 ? '+' : diff < 0 ? '−' : '±') + Math.abs(diff) + unit }));
     }
-    card.append(h('button', { class: 'btn ghost', style: 'width:100%;margin-top:10px', onclick: openBodyForm, text: '+ 몸 기록 입력' }));
+    card.append(h('div', { class: 'actions' }, h('button', { class: 'btn ghost', onclick: openBodyForm, text: '+ 몸 기록 입력' }), h('button', { class: 'btn ghost', onclick: openPhotos, text: '인바디 사진' })));
     const recent = S.body.slice(-5).reverse();
     if (recent.length) card.append(h('div', { class: 'tbl' }, recent.map(b => h('div', { class: 'ex-line' },
       h('span', { class: 'muted', text: md(b.date) }),
@@ -936,7 +957,14 @@ function openBodyForm() {
       const put = (k, el) => { const v = parseFloat(el.value); if (isFinite(v) && v > 0) e[k] = Math.round(v * 10) / 10; };
       put('weight', w); put('muscle', mu); put('fat', ft);
       if (Object.keys(e).length < 2) { toast('값을 하나 이상 넣어 주세요.'); return; }
-      S.body = Logic.upsertBody(S.body, e); save(); closeSheet(); toast('몸 기록을 저장했어요.'); graphView = 'body'; renderLog();
+      S.body = Logic.upsertBody(S.body, e);
+      const latest = S.body[S.body.length - 1];
+      if (S.profile && latest.date === e.date) {
+        const next = Object.assign({}, S.profile, e.weight ? { weight: e.weight } : {}, e.muscle ? { muscle: e.muscle } : {}, e.fat ? { fat: e.fat } : {});
+        if (Logic.validProfile(next, today).ok) Object.assign(S.profile, { weight: next.weight, muscle: next.muscle, fat: next.fat });
+        else toast('프로필 범위를 벗어난 값이라 프로필에는 반영하지 않았어요.');
+      }
+      save(); closeSheet(); toast('몸 기록을 저장했어요.'); graphView = 'body'; renderLog();
     }, text: '저장' }));
   });
 }
@@ -944,7 +972,7 @@ function openBodyForm() {
 let calMonth = todayYmd().slice(0, 7), calSel = todayYmd();
 function renderLog() {
   const root = clear($('#log'));
-  root.append(h('h2', { text: '기록' }));
+  root.append(h('div', { class: 'row' }, h('h2', { class: 'grow', text: '기록' }), h('button', { class: 'linkbtn', onclick: () => openCardioForm(), text: '+ 활동 기록' })));
   renderGraphs(root);
   renderReport(root);
   renderBadges(root);
@@ -975,8 +1003,8 @@ function renderLog() {
   for (const s of ss) {
     const min = Math.max(1, Math.round((s.end - s.start) / 60000));
     const box = h('div', { class: 'card sess' }, h('div', { class: 'row small muted' }, h('span', { class: 'grow', text: new Date(s.start).toTimeString().slice(0, 5) + ' 시작' }), h('span', { text: min + '분' })));
-    for (const it of s.items) box.append(h('div', { class: 'ex-line' }, h('span', { class: 'grow', text: it.name }), h('span', { class: 'muted', text: setsText(it.sets) }),
-      h('button', { class: 'xbtn', 'aria-label': it.name + ' 기록 고치기', onclick: () => editSets(s, it), text: '✎' })));
+    for (const it of s.items) box.append(h('div', { class: 'ex-line' }, h('span', { class: 'grow', text: it.name }), h('span', { class: 'muted', text: itemText2(it) }),
+      it.cardio || Logic.CARDIO.some(c => c.id === it.exId) ? null : h('button', { class: 'xbtn', 'aria-label': it.name + ' 기록 고치기', onclick: () => editSets(s, it), text: '✎' })));
     box.append(h('button', { class: 'btn ghost', style: 'margin-top:8px', onclick: () => ask('기록 지우기', '이 운동 기록을 지울까요? 되돌릴 수 없어요.', '지우기', () => { S.sessions = S.sessions.filter(x => x.id !== s.id); save(); renderLog(); }, true), text: '기록 지우기' }));
     root.append(box);
   }
@@ -1016,7 +1044,26 @@ function editSets(sess, it) {
 function openSettings() {
   openSheet('설정', body => {
     const st = S.settings;
-    body.append(stepper('주간 목표(회)', st.weeklyGoal, 1, 1, 7, v => { st.weeklyGoal = v; save(); render(); }));
+    if (S.profile) {
+      const pf = S.profile, today = todayYmd();
+      body.append(h('div', { class: 'card', style: 'margin-bottom:10px' },
+        h('div', { class: 'row' }, h('b', { class: 'grow', text: pf.nickname }), h('button', { class: 'linkbtn', onclick: () => openOnboarding(2, true), text: '프로필 수정' })),
+        h('div', { class: 'small muted', text: (pf.sex === 'm' ? '남성' : '여성') + ' · ' + Logic.age(pf.birthYear, today) + '세 · ' + pf.height + 'cm · ' + pf.weight + 'kg' + (pf.muscle ? ' · 골격근 ' + pf.muscle + 'kg' : '') + (pf.fat ? ' · 체지방 ' + pf.fat + '%' : '') }),
+        h('div', { class: 'small muted', text: '기초대사량 약 ' + Math.round(Logic.bmr(pf, today)) + 'kcal/일' })));
+    }
+    const gbox = h('div');
+    const drawGoal = () => {
+      clear(gbox);
+      const gseg = h('div', { class: 'seg', role: 'group', 'aria-label': '주간 목표 종류' });
+      [['count', '횟수'], ['minutes', '시간'], ['kcal', '칼로리']].forEach(([v, t]) => gseg.append(h('button', { class: (st.goalType || 'count') === v ? 'on' : '', 'aria-pressed': String((st.goalType || 'count') === v), onclick: () => { st.goalType = v; save(); render(); drawGoal(); }, text: t })));
+      gbox.append(h('div', { class: 'small muted', style: 'margin-top:6px', text: '주간 목표' }), gseg);
+      if (st.goalType === 'minutes') gbox.append(stepper('주간 목표(분)', st.goalMinutes, 10, 30, 2000, v => { st.goalMinutes = v; save(); render(); }));
+      else if (st.goalType === 'kcal') gbox.append(stepper('주간 목표(kcal)', st.goalKcal, 100, 100, 20000, v => { st.goalKcal = v; save(); render(); }),
+        h('div', { class: 'small muted', text: '소모 칼로리는 몸무게와 운동 강도(MET)로 계산한 추정치예요. 시계나 기기 값과 다를 수 있어요.' }));
+      else gbox.append(stepper('주간 목표(회)', st.weeklyGoal, 1, 1, 7, v => { st.weeklyGoal = v; save(); render(); }));
+    };
+    drawGoal();
+    body.append(gbox);
     body.append(stepper('기본 쉬는 시간(초)', st.restSec, 15, 0, 300, v => { st.restSec = v; save(); }));
     const mseg = h('div', { class: 'seg', role: 'group', 'aria-label': '기본 운동 방식' });
     const drawM = () => { clear(mseg); [['reps', '횟수 정하기'], ['amrap', '시간 안에 최대한']].forEach(([v, t]) => mseg.append(h('button', { class: st.mode === v ? 'on' : '', onclick: () => { st.mode = v; save(); drawM(); }, text: t }))); };
@@ -1045,13 +1092,18 @@ function openSettings() {
       h('button', { class: 'btn ghost', style: 'width:100%;margin-top:8px', onclick: copyBackup, text: '백업 내용 복사' }),
       h('p', { class: 'small muted', style: 'margin:6px 0 0', text: '파일 저장이 안 되면 복사해서 메모장에 .json 파일로 저장해 주세요.' }),
       h('p', { class: 'small muted', style: 'margin:4px 0 0', text: S.backup.at ? '마지막 백업: ' + Logic.ymd(new Date(S.backup.at)) : '아직 백업한 적이 없어요.' }));
+    if (S.profile) body.append(h('div', { class: 'toggle' }, h('div', {}, h('div', { text: '정보 보내기' }), h('div', { class: 'small muted', text: S.profile.consent ? '동의함 · 익명 요약만' : '보내지 않음' })),
+      h('button', { class: 'linkbtn', onclick: () => { closeSheet(); setTimeout(openShareSettings, 220); }, text: '설정' })));
     body.append(h('h3', { text: 'HOME-T의 약속' }), h('ul', { class: 'dots small promise' },
-      ['광고를 넣지 않아요.', '별점·리뷰를 조르는 팝업을 띄우지 않아요.', '운동 기록은 이 기기 안에만 저장돼요. 서버로 보내지 않아요.',
+      ['광고를 넣지 않아요.', '별점·리뷰를 조르는 팝업을 띄우지 않아요.', '운동 기록은 이 기기 안에만 저장돼요. 동의한 경우에만, 이름·연락처 없이 요약 정보를 보내요.',
        '유료 기능이 생겨도 카드 등록 없는 무료 체험, 앱 안에서 바로 해지, 무료로 쓸 수 있는 범위를 처음부터 알려 드려요.'].map(t => h('li', { text: t }))));
   });
 }
+function backupData() {
+  return Object.assign({}, S, { activeRun: null, profile: S.profile ? Object.assign({}, S.profile, { consent: false, invite: '' }) : null });
+}
 function exportBackup() {
-  const data = Object.assign({}, S, { activeRun: null });
+  const data = backupData();
   const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' });
   const a = h('a', { href: URL.createObjectURL(blob), download: 'homet-backup-' + todayYmd() + '.json' });
   document.body.append(a); a.click(); a.remove();
@@ -1059,7 +1111,7 @@ function exportBackup() {
   setTimeout(() => ask('백업 파일', '휴대폰에 백업 파일이 저장됐나요? 저장이 안 됐다면 "백업 내용 복사"를 써 주세요.', '저장됐어요', () => { S.backup.at = Date.now(); S.backup.snooze = 0; save(); render(); toast('마지막 백업을 기록했어요.'); }), 600);
 }
 function copyBackup() {
-  const text = JSON.stringify(Object.assign({}, S, { activeRun: null }));
+  const text = JSON.stringify(backupData());
   const fallback = () => openSheet('백업 내용', body => {
     const ta = h('textarea', { rows: 8, readonly: true, 'aria-label': '백업 내용' }); ta.value = text;
     body.append(h('p', { class: 'small muted', text: '전체 선택해서 복사한 뒤, 메모장에 .json 파일로 저장해 주세요.' }), ta,
@@ -1078,10 +1130,377 @@ function importBackup(f) {
     const v = Logic.validateBackup(o);
     if (!v.ok) { toast('가져오지 못했어요: ' + (o ? v.error : 'JSON 파일이 아니에요.') + ' 기존 기록은 그대로예요.'); return; }
     ask('백업 가져오기', '지금 기록과 시간표를 백업 파일 내용으로 바꿀까요? (기록 ' + o.sessions.length + '개)', '바꾸기', () => {
-      S = Logic.ensureRoutines(Logic.loadState(JSON.stringify(o))); S.activeRun = null; S.backup = { at: Date.now(), snooze: 0 }; save(); toast('백업을 가져왔어요.'); render();
+      const mine = S.profile;
+      S = Logic.ensureRoutines(Logic.loadState(JSON.stringify(o))); S.activeRun = null;
+      if (mine) S.profile = S.profile ? Object.assign(S.profile, { anonId: mine.anonId, consent: mine.consent, invite: mine.invite }) : mine;
+      else if (S.profile) Object.assign(S.profile, { anonId: newAnonId(), consent: false, invite: '' }); S.backup = { at: Date.now(), snooze: 0 }; save(); toast('백업을 가져왔어요.'); render();
     });
   };
   r.readAsText(f);
+}
+
+/* ================= 사진 보관 (기기 안 IndexedDB) ================= */
+const PHOTO_DB = 'homet-photos';
+function idb() {
+  return new Promise((ok, no) => {
+    try { const r = indexedDB.open(PHOTO_DB, 1); r.onupgradeneeded = () => r.result.createObjectStore('photos', { keyPath: 'id' }); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); }
+    catch (e) { no(e); }
+  });
+}
+async function photoPut(rec) { const db = await idb(); return new Promise((ok, no) => { const tx = db.transaction('photos', 'readwrite'); tx.objectStore('photos').put(rec); tx.oncomplete = ok; tx.onerror = () => no(tx.error); }); }
+async function photoList() { const db = await idb(); return new Promise((ok, no) => { const q = db.transaction('photos').objectStore('photos').getAll(); q.onsuccess = () => ok(q.result.sort((a, b) => b.date.localeCompare(a.date))); q.onerror = () => no(q.error); }); }
+async function photoDel(id) { const db = await idb(); return new Promise(ok => { const tx = db.transaction('photos', 'readwrite'); tx.objectStore('photos').delete(id); tx.oncomplete = ok; }); }
+function shrinkImage(file) {
+  return new Promise((ok, no) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 1280 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      ok(c.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); no(new Error('이미지를 읽지 못했어요.')); };
+    img.src = url;
+  });
+}
+async function saveInbodyPhoto(file) {
+  try { const data = await shrinkImage(file); await photoPut({ id: 'p' + Date.now(), date: todayYmd(), kind: 'inbody', data }); toast('인바디 사진을 이 기기에 저장했어요.'); if (tab === 'log') renderLog(); }
+  catch (e) { toast('사진을 저장하지 못했어요. 이 브라우저에서는 사진 보관이 안 될 수 있어요.'); }
+}
+function openPhotos() {
+  openSheet('인바디 사진', async body => {
+    body.append(h('p', { class: 'small muted', style: 'margin:0 0 8px', text: '사진은 이 기기 안에만 있어요. 다른 곳으로 보내지 않아요.' }));
+    const file = h('input', { type: 'file', accept: 'image/*', style: 'display:none' });
+    file.addEventListener('change', async () => { if (file.files[0]) { await saveInbodyPhoto(file.files[0]); closeSheet(); openPhotos(); } });
+    body.append(file, h('button', { class: 'btn ghost', style: 'width:100%;margin-bottom:10px', onclick: () => file.click(), text: '+ 사진 추가' }));
+    let list = [];
+    try { list = await photoList(); } catch (e) { body.append(h('p', { class: 'muted', text: '이 브라우저에서는 사진을 보관할 수 없어요.' })); return; }
+    if (!list.length) body.append(h('p', { class: 'muted small', text: '아직 사진이 없어요.' }));
+    for (const ph of list) body.append(h('div', { class: 'photo' }, h('div', { class: 'row small muted' }, h('span', { class: 'grow', text: ph.date }),
+      h('button', { class: 'xbtn', 'aria-label': ph.date + ' 사진 지우기', onclick: async () => { await photoDel(ph.id); closeSheet(); openPhotos(); }, text: '✕' })),
+      h('img', { src: ph.data, alt: ph.date + ' 인바디 사진' })));
+  });
+}
+
+/* ================= 첫 화면 프로필 등록 ================= */
+let onboardEl = null;
+function closeOnboarding() { if (onboardEl) onboardEl.remove(); onboardEl = null; document.body.style.overflow = ''; }
+function openOnboarding(step, editing) {
+  closeSheet();
+  if (!onboardEl) { onboardEl = h('div', { class: 'run onboard', role: 'dialog', 'aria-label': '프로필 등록' }); document.body.append(onboardEl); }
+  document.body.style.overflow = 'hidden';
+  const yr = Number(todayYmd().slice(0, 4));
+  const lastBody = S.body.slice().reverse();
+  const pick = k => { const b = lastBody.find(x => x[k] != null); return b ? b[k] : null; };
+  const f = Object.assign({ nickname: '', sex: '', birthYear: null, height: null, weight: pick('weight'), muscle: pick('muscle'), fat: pick('fat') }, S.profile || {});
+  let photo = null;
+  const draw = () => {
+    const root = clear(onboardEl), inner = h('div', { class: 'run-in', style: 'overflow:auto' });
+    root.append(inner);
+    inner.append(h('div', { class: 'row', style: 'margin-bottom:6px' }, h('div', { class: 'brand grow', text: 'HOME-T' }),
+      editing ? h('button', { class: 'close', 'aria-label': '닫기', onclick: closeOnboarding, text: '×' }) : h('span', { class: 'small muted', text: step + ' / 3' })));
+    if (step === 1) {
+      inner.append(h('h2', { style: 'margin-top:24px', text: '집에서, 한 개 더.' }),
+        h('ul', { class: 'dots', style: 'line-height:1.9' },
+          h('li', { text: '맨몸·아령 운동 82개를 졸라맨 그림으로 따라 해요.' }),
+          h('li', { text: '요일별 시간표, 타이머, 음성 안내로 혼자서도 끝까지.' }),
+          h('li', { text: '조금씩 늘려 주는 목표와 기록 그래프로 꾸준하게.' })),
+        h('p', { class: 'muted small', text: '먼저 몸 정보를 알려 주세요. 소모 칼로리와 맞춤 목표 계산에 써요. 이 정보는 이 기기에 저장돼요.' }),
+        h('div', { style: 'flex:1' }),
+        h('button', { class: 'btn primary big', onclick: () => { step = 2; draw(); }, text: '시작하기' }));
+      return;
+    }
+    if (step === 2) {
+      const errs = {};
+      const box = h('div', { class: 'form' });
+      const field = (label, key, attrs, hint) => {
+        const inp = h('input', Object.assign({ class: 'field', value: f[key] == null ? '' : f[key], 'aria-label': label }, attrs));
+        inp.addEventListener('input', () => { const v = inp.value.trim(); f[key] = attrs.type === 'number' ? (v === '' ? null : Number(v)) : v; });
+        const err = h('div', { class: 'err', id: 'err-' + key });
+        return [h('label', { class: 'small muted', text: label + (hint ? ' ' + hint : '') }), inp, err];
+      };
+      const sexSeg = h('div', { class: 'seg', role: 'group', 'aria-label': '성별' });
+      const drawSex = () => { clear(sexSeg); [['m', '남성'], ['f', '여성']].forEach(([v, t]) => sexSeg.append(h('button', { class: f.sex === v ? 'on' : '', onclick: () => { f.sex = v; drawSex(); }, text: t }))); };
+      drawSex();
+      const by = h('select', { class: 'field', 'aria-label': '출생연도' }, h('option', { value: '', text: '출생연도 고르기' }),
+        Array.from({ length: yr - 14 - 1930 + 1 }, (_, i) => yr - 14 - i).map(y => { const o = h('option', { value: y, text: y + '년' }); if (f.birthYear === y) o.selected = true; return o; }));
+      by.addEventListener('change', () => { f.birthYear = by.value ? Number(by.value) : null; });
+      const ph = h('input', { type: 'file', accept: 'image/*', style: 'display:none' });
+      const phLabel = h('span', { class: 'small muted', text: '선택 · 기기 안에만 저장' });
+      ph.addEventListener('change', () => { photo = ph.files[0] || null; phLabel.textContent = photo ? '사진 1장 선택됨' : '선택 · 기기 안에만 저장'; });
+      box.append(...field('닉네임 (실명 말고 별명)', 'nickname', { maxlength: 20, placeholder: '예: 아침러너' }),
+        h('label', { class: 'small muted', text: '성별' }), sexSeg, h('div', { class: 'err', id: 'err-sex' }),
+        h('label', { class: 'small muted', text: '출생연도' }), by, h('div', { class: 'err', id: 'err-birthYear' }),
+        h('div', { class: 'two' }, h('div', {}, ...field('키(cm)', 'height', { type: 'number', inputmode: 'decimal', step: '0.1' })), h('div', {}, ...field('몸무게(kg)', 'weight', { type: 'number', inputmode: 'decimal', step: '0.1' }))),
+        h('div', { class: 'small muted', style: 'margin-top:6px', text: '인바디 결과가 있으면 (선택)' }),
+        h('div', { class: 'two' }, h('div', {}, ...field('골격근량(kg)', 'muscle', { type: 'number', inputmode: 'decimal', step: '0.1' })), h('div', {}, ...field('체지방률(%)', 'fat', { type: 'number', inputmode: 'decimal', step: '0.1' }))),
+        ph, h('div', { class: 'row', style: 'margin:6px 0 12px' }, h('button', { class: 'btn ghost', onclick: () => ph.click(), text: '인바디 사진 첨부' }), phLabel));
+      inner.append(h('h2', { text: '몸 정보' }), box);
+      inner.append(h('button', { class: 'btn primary big', onclick: async () => {
+        f.nickname = (f.nickname || '').trim();
+        const r = Logic.validProfile(f, todayYmd());
+        document.querySelectorAll('.onboard .err').forEach(e => { e.textContent = ''; });
+        if (!r.ok) { for (const k in r.errors) { const e = document.getElementById('err-' + k); if (e) e.textContent = r.errors[k]; } toast('입력한 값을 확인해 주세요.'); return; }
+        if (photo) await saveInbodyPhoto(photo);
+        if (editing) { finishProfile(f, S.profile.consent, S.profile.invite); return; }
+        step = 3; draw();
+      }, text: editing ? '저장' : '다음' }));
+      Object.assign(errs, {});
+      return;
+    }
+    // step 3: 동의
+    let consent = !!(S.profile && S.profile.consent);
+    const invite = h('input', { class: 'field', placeholder: '지인에게 받은 초대 코드', value: (S.profile && S.profile.invite) || '', 'aria-label': '초대 코드' });
+    const inviteRow = h('div', {}, h('label', { class: 'small muted', text: '초대 코드' }), invite);
+    const cb = h('button', { class: 'switch' + (consent ? ' on' : ''), role: 'switch', 'aria-checked': String(consent), 'aria-label': '익명 정보 보내기 동의', onclick: () => { consent = !consent; cb.classList.toggle('on', consent); cb.setAttribute('aria-checked', String(consent)); inviteRow.hidden = !consent; } });
+    inviteRow.hidden = !consent;
+    inner.append(h('h2', { text: '정보 보내기 (선택)' }),
+      h('p', { class: 'small', text: 'HOME-T를 더 좋게 만들기 위해, 동의한 분만 아래 정보를 이름·연락처 없이 보내요. 동의하지 않아도 모든 기능을 쓸 수 있어요.' }),
+      h('ul', { class: 'dots small' }, ['익명 번호, 닉네임, 성별, 나이, 키, 몸무게', '(입력한 경우) 골격근량, 체지방률', '목표 종류, 최근 4주 운동한 날·시간·칼로리, 마지막 사용일'].map(t => h('li', { text: t }))),
+      h('p', { class: 'small muted', text: '보내지 않는 것: 세트별 기록, 사진, 메모. 설정에서 언제든 동의를 끄거나 내 정보 삭제를 요청할 수 있어요.' }),
+      h('div', { class: 'toggle' }, h('span', { text: '만 14세 이상이며, 익명 정보 보내기에 동의해요' }), cb), inviteRow,
+      h('div', { style: 'flex:1' }),
+      h('button', { class: 'btn primary big', style: 'margin-top:14px', onclick: () => { if (consent && !invite.value.trim()) { toast('초대 코드를 넣거나 동의를 꺼 주세요.'); invite.focus(); return; } finishProfile(f, consent, invite.value.trim()); }, text: '완료' }));
+  };
+  draw();
+}
+function finishProfile(f, consent, invite) {
+  const prev = S.profile || {};
+  S.profile = { nickname: f.nickname.trim(), sex: f.sex, birthYear: f.birthYear, height: f.height, weight: f.weight, muscle: f.muscle == null ? null : f.muscle, fat: f.fat == null ? null : f.fat,
+    anonId: prev.anonId || newAnonId(), consent: !!consent, invite: invite || '' };
+  const e = { date: todayYmd(), weight: f.weight };
+  if (f.muscle != null) e.muscle = f.muscle;
+  if (f.fat != null) e.fat = f.fat;
+  S.body = Logic.upsertBody(S.body, e);
+  save(); closeOnboarding(); render(); toast('프로필을 저장했어요.');
+  syncNow();
+}
+
+/* ================= 정보 보내기 (지인 테스트용) ================= */
+// 구글 Apps Script 웹앱 주소. 비어 있으면 아무것도 보내지 않아요.
+const ENDPOINT = '';
+function syncState() { try { return JSON.parse(localStorage.getItem('homet.sync')) || {}; } catch (e) { return {}; } }
+function setSync(o) { try { localStorage.setItem('homet.sync', JSON.stringify(Object.assign(syncState(), o))); } catch (e) { /* 무시 */ } }
+async function post(body) {
+  const r = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) });
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || 'fail');
+  return j;
+}
+const PERMANENT = new Set(['invite', 'id', 'deleted', 'type', 'bad json']);
+function newAnonId() { return 'u_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+let syncQueue = Promise.resolve(), syncQueued = false;
+// 보내기·삭제를 한 번에 하나씩 차례로 (삭제 뒤에 보내기가 끼어들어 줄이 되살아나지 않게)
+function syncNow() {
+  if (!ENDPOINT || syncQueued) return syncQueue;
+  syncQueued = true;
+  syncQueue = syncQueue.then(() => { syncQueued = false; return doSync(); }).catch(() => { /* 무시 */ });
+  return syncQueue;
+}
+async function doSync() {
+  let st = syncState();
+  if (st.pendingDelete) {
+    try { await post({ t: 'delete', code: st.delCode, id: st.delId }); setSync({ pendingDelete: false, sentId: '', sentCode: '', last: 0, delNotice: 'ok' }); }
+    catch (e) {
+      const m = String(e.message || e);
+      if (!PERMANENT.has(m)) return; // 연결 문제: 다음에 다시
+      setSync({ pendingDelete: false, delNotice: 'fail' });
+    }
+  }
+  const pf = S.profile;
+  if (!pf || !pf.consent || !pf.invite) return;
+  const data = Logic.payload(S, todayYmd());
+  try { await post({ t: 'upsert', code: pf.invite, data }); setSync({ last: Date.now(), pending: false, error: '', sentId: data.id, sentCode: pf.invite }); }
+  catch (e) { const m = String(e.message || e); setSync({ pending: !PERMANENT.has(m), error: m }); }
+}
+async function requestDelete() {
+  const pf = S.profile, st = syncState();
+  const id = st.sentId || (pf && pf.anonId), code = st.sentCode || (pf && pf.invite);
+  if (pf) { pf.consent = false; pf.anonId = newAnonId(); save(); } // 다시 동의하면 새 번호로
+  if (!ENDPOINT || !id || !code) { toast('보낸 정보가 없어요. 보내기를 껐어요.'); return; }
+  setSync({ pendingDelete: true, delId: id, delCode: code, delNotice: '' });
+  await syncNow();
+  const r = syncState();
+  toast(r.delNotice === 'ok' ? '보낸 정보를 지웠어요.' : r.delNotice === 'fail' ? '삭제가 거절됐어요. 테스트 운영자에게 직접 요청해 주세요.' : '지금은 연결이 안 돼요. 다음에 앱을 열 때 다시 지울게요.');
+}
+function openShareSettings() {
+  openSheet('정보 보내기', body => {
+    const pf = S.profile;
+    if (!pf) { body.append(h('p', { class: 'small', text: '프로필을 먼저 만들어 주세요.' })); return; }
+    let consent = !!pf.consent;
+    const invite = h('input', { class: 'field', placeholder: '지인에게 받은 초대 코드', value: pf.invite || '', 'aria-label': '초대 코드' });
+    const inviteRow = h('div', {}, h('label', { class: 'small muted', text: '초대 코드' }), invite);
+    inviteRow.hidden = !consent;
+    const cb = h('button', { class: 'switch' + (consent ? ' on' : ''), role: 'switch', 'aria-checked': String(consent), 'aria-label': '익명 정보 보내기 동의', onclick: () => { consent = !consent; cb.classList.toggle('on', consent); cb.setAttribute('aria-checked', String(consent)); inviteRow.hidden = !consent; } });
+    const st = syncState();
+    body.append(h('p', { class: 'small', text: '동의한 경우에만, 이름·연락처 없이 아래 요약 정보를 보내요.' }),
+      h('ul', { class: 'dots small' }, ['익명 번호, 닉네임, 성별, 나이, 키, 몸무게', '(입력한 경우) 골격근량, 체지방률', '목표 종류, 최근 4주 운동한 날·시간·칼로리, 마지막 사용일'].map(t => h('li', { text: t }))),
+      h('p', { class: 'small muted', text: '보내지 않는 것: 세트별 기록, 체감, 메모, 사진, 출생연도.' }),
+      h('div', { class: 'toggle' }, h('span', { text: '만 14세 이상이며, 익명 정보 보내기에 동의해요' }), cb), inviteRow,
+      h('p', { class: 'small muted', text: !ENDPOINT ? '아직 받는 곳이 정해지지 않아 실제로는 보내지 않아요.' : st.pendingDelete ? '삭제 요청을 보내는 중이에요.' : st.error === 'invite' ? '초대 코드가 맞지 않아 보내지 못했어요.' : st.last ? '마지막으로 보낸 날: ' + Logic.ymd(new Date(st.last)) : st.pending ? '보내기에 실패했어요. 다음에 다시 시도해요.' : '아직 보낸 적이 없어요.' }),
+      h('button', { class: 'btn primary big', onclick: () => {
+        const code = invite.value.trim();
+        if (consent && !code) { toast('초대 코드를 넣어 주세요.'); invite.focus(); return; }
+        pf.consent = consent; if (consent) pf.invite = code;
+        if (consent && st.error) setSync({ error: '' });
+        save(); closeSheet(); toast(consent ? '저장했어요.' : '보내기를 껐어요.'); syncNow();
+      }, text: '저장' }),
+      h('button', { class: 'linkbtn', style: 'margin-top:12px', onclick: () => ask('내 정보 삭제 요청', '지금까지 보낸 정보를 지우고 보내기를 꺼요. 이 기기 안의 기록은 그대로 남아요.', '삭제 요청', () => { closeSheet(); requestDelete(); }), text: '내 정보 삭제 요청' }));
+  });
+}
+
+/* ================= 유산소 ================= */
+const CARDIO_FIELDS = { treadmill: ['km', 'speed', 'incline'], 'outdoor-run': ['km'], walk: ['km'], futsal: [], cycle: ['km'], other: [] };
+function goalNow(day) { return Logic.goalProgress(S.settings, Logic.weekStats(S.sessions, day || todayYmd(), weightNow())); }
+function streakNow() { return Logic.streakBy(S.sessions, S.settings, todayYmd(), S.restWeeks, weightNow()); }
+function goalText(g) { return g.unit === '회' ? g.value + ' / ' + g.goal + '회' : g.value.toLocaleString() + ' / ' + g.goal.toLocaleString() + g.unit; }
+function weightNow() { return (S.profile && S.profile.weight) || ((S.body.slice().reverse().find(x => x.weight) || {}).weight) || null; }
+function openCardioForm(pre) {
+  pre = pre || {};
+  const o = { kind: pre.kind || 'treadmill', date: pre.date || todayYmd(), min: pre.min || null, km: pre.km || null, speed: pre.speed || null, incline: null, name: '' };
+  openSheet('활동 기록', body => {
+    const kinds = h('div', { class: 'qchips', role: 'group', 'aria-label': '활동 종류' });
+    const fields = h('div');
+    const est = h('div', { class: 'small muted', style: 'margin:6px 0' });
+    const upd = () => {
+      if (!o.min) { est.textContent = ''; return; }
+      const sess = Logic.cardioSession(o.kind, { min: o.min, km: o.km, speed: o.speed, incline: o.incline, date: o.date, start: 0 });
+      const w = weightNow();
+      est.textContent = w ? '예상 소모 약 ' + Math.round(Logic.sessionKcal(sess, w)) + 'kcal (MET ' + Logic.metFor(sess.items[0]) + ' 기준 추정치)' : '프로필에 몸무게를 넣으면 소모 칼로리를 보여 드려요.';
+    };
+    const num = (label, key, step) => {
+      const i = h('input', { class: 'field', type: 'number', inputmode: 'decimal', step: step || '0.1', min: '0', value: o[key] == null ? '' : o[key], 'aria-label': label });
+      i.addEventListener('input', () => { const v = parseFloat(i.value); o[key] = isFinite(v) && v > 0 ? v : null; upd(); });
+      return h('div', {}, h('label', { class: 'small muted', text: label }), i);
+    };
+    const drawFields = () => {
+      clear(fields);
+      const date = h('input', { class: 'field', type: 'date', value: o.date, max: todayYmd(), 'aria-label': '날짜' });
+      date.addEventListener('change', () => { o.date = date.value || todayYmd(); });
+      fields.append(h('div', { class: 'two' }, h('div', {}, h('label', { class: 'small muted', text: '날짜' }), date), num('시간(분)', 'min', '1')));
+      const extra = CARDIO_FIELDS[o.kind];
+      const lab = { km: '거리(km)', speed: '속도(km/h)', incline: '경사(%)' };
+      if (extra.length) fields.append(h('div', { class: 'two' }, extra.map(k => num(lab[k] + ' (선택)', k))));
+      if (o.kind === 'other') { const n = h('input', { class: 'field', placeholder: '활동 이름 (예: 등산)', maxlength: 20, 'aria-label': '활동 이름' }); n.addEventListener('input', () => { o.name = n.value.trim(); }); fields.append(n); }
+      upd();
+    };
+    const drawKinds = () => { clear(kinds); Logic.CARDIO.forEach(c => kinds.append(h('button', { class: 'chip' + (o.kind === c.id ? ' on' : ''), onclick: () => { o.kind = c.id; o.km = o.speed = o.incline = null; drawKinds(); drawFields(); }, text: c.name }))); };
+    drawKinds(); drawFields();
+    body.append(kinds, fields, est, h('button', { class: 'btn primary big', onclick: () => {
+      if (!o.min || o.min > 600) { toast('시간을 1~600분으로 적어 주세요.'); return; }
+      const start = o.date === todayYmd() ? Date.now() - o.min * 60000 : Date.parse(o.date + 'T12:00');
+      S.sessions.push(Logic.cardioSession(o.kind, { min: o.min, km: o.km, speed: o.speed, incline: o.incline, date: o.date, start, name: o.kind === 'other' && o.name ? o.name : null }));
+      save(); closeSheet(); toast('활동을 기록했어요.'); render();
+      syncNow();
+    }, text: '저장' }));
+  });
+}
+
+/* 러닝 타이머: 인터벌 또는 자유 달리기, GPS(시험) */
+let iv = null, ivEl = null, ivTick = 0, gpsWatch = null;
+const IV_LABEL = { warm: '워밍업 걷기', run: '달리기', walk: '걷기', cool: '마무리 걷기', free: '달리기' };
+function openIntervalSetup() {
+  let saved = {}; try { saved = JSON.parse(localStorage.getItem('homet.interval')) || {}; } catch (e) { saved = {}; }
+  const o = Object.assign({ mode: 'interval', kind: 'treadmill', warm: 3, run: 2, walk: 2, rounds: 6, cool: 2, gps: false }, saved);
+  openSheet('러닝 타이머', body => {
+    const wrap = h('div');
+    const draw = () => {
+      clear(wrap);
+      const seg = (vals, key) => { const b = h('div', { class: 'seg' }); vals.forEach(([v, t]) => b.append(h('button', { class: o[key] === v ? 'on' : '', onclick: () => { o[key] = v; draw(); }, text: t }))); return b; };
+      wrap.append(seg([['interval', '인터벌'], ['free', '자유 달리기']], 'mode'), seg([['treadmill', '러닝머신'], ['outdoor-run', '실외']], 'kind'));
+      if (o.mode === 'interval') {
+        wrap.append(stepper('워밍업 걷기(분)', o.warm, 1, 0, 15, v => o.warm = v), stepper('달리기(분)', o.run, 1, 1, 30, v => o.run = v),
+          stepper('걷기(분)', o.walk, 1, 0, 10, v => o.walk = v), stepper('반복(번)', o.rounds, 1, 1, 20, v => o.rounds = v), stepper('마무리 걷기(분)', o.cool, 1, 0, 15, v => o.cool = v));
+        const tot = Logic.intervalPlan(o).reduce((a, x) => a + x.sec, 0) / 60;
+        wrap.append(h('p', { class: 'small muted', text: '총 ' + Math.round(tot) + '분. 바뀔 때마다 음성으로 알려 드려요.' }));
+      } else wrap.append(h('p', { class: 'small muted', text: '시간을 재고, 끝나면 거리를 넣어 기록해요.' }));
+      if (o.kind === 'outdoor-run') {
+        const sw = h('button', { class: 'switch' + (o.gps ? ' on' : ''), role: 'switch', 'aria-checked': String(o.gps), 'aria-label': 'GPS로 거리 재기', onclick: () => { o.gps = !o.gps; draw(); } });
+        wrap.append(h('div', { class: 'toggle' }, h('div', {}, h('div', { text: 'GPS로 거리 재기 (시험 기능)' }), h('div', { class: 'small muted', text: '화면이 켜져 있는 동안만 재요. 화면을 끄거나 다른 앱으로 가면 멈춰요.' })), sw));
+      }
+      wrap.append(h('button', { class: 'btn primary big', style: 'margin-top:10px', onclick: () => { try { localStorage.setItem('homet.interval', JSON.stringify(o)); } catch (e) { /* 무시 */ } closeSheet(); startInterval(o); }, text: '시작' }));
+    };
+    draw();
+    body.append(wrap);
+  });
+}
+function startInterval(o) {
+  unlockVoice();
+  const plan = o.mode === 'interval' ? Logic.intervalPlan(o) : [{ kind: 'free', sec: 0 }];
+  iv = { o, plan, idx: 0, segStart: Date.now(), paused: 0, pauseAt: 0, start: Date.now(), points: [], said: new Set(), done: false };
+  if (!ivEl) { ivEl = h('div', { class: 'run', role: 'dialog', 'aria-label': '러닝 타이머' }); document.body.append(ivEl); }
+  document.body.style.overflow = 'hidden';
+  lockWake();
+  speak(o.mode === 'interval' ? IV_LABEL[plan[0].kind] + ', ' + Math.round(plan[0].sec / 60) + '분' : '시작합니다', true);
+  if (o.gps && o.kind === 'outdoor-run' && 'geolocation' in navigator) {
+    try { gpsWatch = navigator.geolocation.watchPosition(p => { if (iv && !iv.pauseAt) iv.points.push({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy, t: Date.now() }); }, () => toast('위치를 쓸 수 없어요. 거리는 끝나고 직접 넣어 주세요.'), { enableHighAccuracy: true, maximumAge: 2000 }); }
+    catch (e) { gpsWatch = null; }
+  }
+  clearInterval(ivTick); ivTick = setInterval(ivUpdate, 250);
+  ivDraw();
+}
+function ivElapsed(now) { return (iv.pauseAt || now) - iv.start - iv.paused; }
+function ivSegLeft(now) { return iv.plan[iv.idx].sec * 1000 - ((iv.pauseAt || now) - iv.segStart); }
+function ivDraw() {
+  if (!iv || !ivEl) return;
+  const root = clear(ivEl), inner = h('div', { class: 'run-in' });
+  root.append(inner);
+  const seg = iv.plan[iv.idx];
+  inner.append(h('div', { class: 'run-top' }, h('button', { class: 'close', 'aria-label': '끝내기', onclick: ivFinish, text: '×' }),
+    h('div', { class: 'bar' }, h('i', { id: 'ivBar', style: 'width:0%' })),
+    h('span', { class: 'small muted', text: iv.o.mode === 'interval' ? (iv.idx + 1) + ' / ' + iv.plan.length : '' })));
+  const body = h('div', { class: 'run-body' });
+  inner.append(body);
+  const next = iv.plan[iv.idx + 1];
+  body.append(...[h('div', { class: 'blocktag ivtag ' + seg.kind, text: IV_LABEL[seg.kind] }),
+    h('div', { class: 'big-num', id: 'ivNum', text: '' }),
+    h('div', { class: 'target', id: 'ivTotal', text: '' }),
+    iv.o.gps ? h('div', { class: 'last', id: 'ivGps', text: 'GPS 거리 0.00km' }) : null,
+    next ? h('div', { class: 'last', text: '다음: ' + IV_LABEL[next.kind] + ' ' + Math.round(next.sec / 60) + '분' }) : null,
+    h('div', { class: 'actions', style: 'justify-content:center' },
+      h('button', { class: 'btn ghost', onclick: () => { const now = Date.now(); if (iv.pauseAt) { iv.paused += now - iv.pauseAt; iv.segStart += now - iv.pauseAt; iv.pauseAt = 0; } else iv.pauseAt = now; ivDraw(); }, text: iv.pauseAt ? '계속' : '잠깐 멈춤' }),
+      h('button', { class: 'btn primary', onclick: ivFinish, text: '끝내기' }))].filter(Boolean));
+  ivUpdate();
+}
+function ivUpdate() {
+  if (!iv || !ivEl) return;
+  const now = Date.now();
+  const el = ivElapsed(now);
+  const mmss = ms => { const t = Math.max(0, Math.round(ms / 1000)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
+  const n = document.getElementById('ivNum'), tot = document.getElementById('ivTotal'), bar = document.getElementById('ivBar'), g = document.getElementById('ivGps');
+  if (g) g.textContent = 'GPS 거리 ' + Logic.trackDistance(iv.points).toFixed(2) + 'km';
+  if (iv.o.mode === 'free') { if (n) n.textContent = mmss(el); if (tot) tot.textContent = ''; return; }
+  const total = iv.plan.reduce((a, x) => a + x.sec, 0) * 1000;
+  if (bar) bar.style.width = Math.min(100, el / total * 100) + '%';
+  if (tot) tot.textContent = '전체 ' + mmss(el) + ' / ' + mmss(total);
+  if (iv.pauseAt) return;
+  const left = ivSegLeft(now);
+  if (n) n.textContent = mmss(left);
+  const sec = Math.ceil(left / 1000), key = iv.idx + ':' + sec;
+  if (sec >= 1 && sec <= 3 && !iv.said.has(key)) { iv.said.add(key); speak(String(sec), true); }
+  if (left <= 0) {
+    let end = iv.segStart + iv.plan[iv.idx].sec * 1000;
+    while (end <= now && iv.idx < iv.plan.length - 1) { iv.idx++; iv.segStart = end; end += iv.plan[iv.idx].sec * 1000; }
+    if (end <= now) { speak('끝! 수고했어요', true); ivFinish(); return; }
+    const seg = iv.plan[iv.idx];
+    speak((seg.kind === 'run' ? '달리세요' : seg.kind === 'walk' ? '걸으세요' : IV_LABEL[seg.kind]) + ', ' + Math.round(seg.sec / 60) + '분', true);
+    beep(); ivDraw();
+  }
+}
+function ivStop() {
+  clearInterval(ivTick); ivTick = 0;
+  if (gpsWatch != null) { try { navigator.geolocation.clearWatch(gpsWatch); } catch (e) { /* 무시 */ } gpsWatch = null; }
+  if (ivEl) ivEl.remove(); ivEl = null;
+  document.body.style.overflow = ''; releaseWake();
+}
+function ivFinish() {
+  if (!iv) return;
+  const min = Math.max(1, Math.round(ivElapsed(Date.now()) / 60000));
+  const km = iv.o.gps ? Logic.trackDistance(iv.points) : null;
+  const kind = iv.o.kind;
+  iv = null; ivStop();
+  openCardioForm({ kind, min, km: km && km > 0.05 ? Math.round(km * 100) / 100 : null });
+  toast('시간을 채워 뒀어요. 거리를 확인하고 저장해 주세요.');
 }
 
 /* ================= 음성 안내 ================= */
@@ -1413,10 +1832,10 @@ function finish() {
   speak('수고했어요. 오늘 운동 끝!', true);
   const s = Logic.endRun(run, Date.now());
   if (s.items.length) S.sessions.push(s);
-  run.phase = 'done'; run.finished = s; persist(); drawRun();
+  run.phase = 'done'; run.finished = s; persist(); drawRun(); syncNow();
 }
 function drawSummary(body) {
-  if (!run.finished) { const s = Logic.endRun(run, Date.now()); if (s.items.length) S.sessions.push(s); run.finished = s; persist(); }
+  if (!run.finished) { const s = Logic.endRun(run, Date.now()); if (s.items.length) S.sessions.push(s); run.finished = s; persist(); syncNow(); }
   const s = run.finished;
   if (runFig) runFig.stop(); runFig = null;
   const sets = s.items.reduce((a, x) => a + x.sets.length, 0);
@@ -1424,8 +1843,9 @@ function drawSummary(body) {
   body.append(h('h2', { text: '수고했어요' }), h('div', { class: 'stats' },
     h('div', { class: 'stat' }, h('span', { class: 'small muted', text: '시간' }), h('b', { text: min + '분' })),
     h('div', { class: 'stat' }, h('span', { class: 'small muted', text: '완료 세트' }), h('b', { text: sets + '세트' })),
-    h('div', { class: 'stat' }, h('span', { class: 'small muted', text: '이번 주' }), h('b', { text: Logic.weekCount(S.sessions, todayYmd()) + '회' }))));
-  body.append(h('ul', { class: 'sum' }, s.items.map(it => h('li', {}, h('span', { text: it.name }), h('span', { class: 'muted small', text: setsText(it.sets) })))));
+    weightNow() ? h('div', { class: 'stat' }, h('span', { class: 'small muted', text: '소모 (추정)' }), h('b', { text: '약 ' + Math.round(Logic.sessionKcal(s, weightNow())) + 'kcal' })) : null,
+    h('div', { class: 'stat' }, h('span', { class: 'small muted', text: '이번 주' }), h('b', { text: goalText(goalNow()) }))));
+  body.append(h('ul', { class: 'sum' }, s.items.map(it => h('li', {}, h('span', { text: it.name }), h('span', { class: 'muted small', text: itemText2(it) })))));
   const fb = feelBox(); if (fb) body.append(fb);
   const nowB = Logic.badges(S.sessions, S.settings.weeklyGoal, todayYmd(), S.restWeeks).filter(b => b.date);
   const beforeB = new Set(Logic.badges(S.sessions.filter(x => x.id !== s.id), S.settings.weeklyGoal, todayYmd(), S.restWeeks).filter(b => b.date).map(b => b.id));
@@ -1464,7 +1884,7 @@ async function lockWake() {
   try { if ('wakeLock' in navigator && !wake) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); } } catch (e) { wake = null; }
 }
 function releaseWake() { try { if (wake) wake.release(); } catch (e) { /* 무시 */ } wake = null; }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && run) { lockWake(); onTick(); } });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') return; if (run) { lockWake(); onTick(); } if (iv) { lockWake(); ivUpdate(); } });
 // 첫 터치 때 소리 준비 (모바일 자동재생 제한)
 document.addEventListener('pointerdown', () => { try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch (e) { /* 무시 */ } }, { once: true });
 
@@ -1488,7 +1908,9 @@ if (S.activeRun) {
       h('button', { class: 'btn primary', onclick: () => { closeSheet(); run = saved; if (run.phase === 'done') { closeRun(); return; } openRun(); }, text: '이어서 하기' })));
   });
 }
-window.__app = { get S() { return S; }, go, startRun, lookup };
+else if (!S.profile) openOnboarding(1);
+window.__app = { get S() { return S; }, go, startRun, lookup, openOnboarding };
+{ const st = syncState(); if (st.pendingDelete || st.pending || (S.profile && S.profile.consent && (!st.last || Logic.ymd(new Date(st.last)) !== todayYmd()))) setTimeout(syncNow, 1500); }
 })();
 </script>
 <script>
